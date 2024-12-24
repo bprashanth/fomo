@@ -33,10 +33,12 @@ const emit = defineEmits(['tabSelected']);
 const selectedTab = ref(props.tabs[0]);
 
 watch(() => props.tabs, () => {
+  console.log('Watch fired in tabs ', props.tabs);
   selectedTab.value = props.tabs[0];
 });
 
 const selectTab = (tab) => {
+  console.log('selectTab called with tab ', tab);
   selectedTab.value = tab;
   emit('tabSelected', tab);
 };
