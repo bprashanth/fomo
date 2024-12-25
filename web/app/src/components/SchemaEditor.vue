@@ -1,78 +1,62 @@
 <template>
   <div class="schema-engine">
-    <h3>Editing Schema for Tab :{{ tabData.name }}</h3>
+    <h3>Editing Schema for Tab: {{ tabData.name }}</h3>
 
-    <!-- The drop zone for the fields
-
-      Left side: drop-zone
-      - shows a list of fields in the current tab
-
-      Right side: draggable-tabs
-      - shows a list of tabs excluding the current tab (otherTabs)
-      - when a tab is dragged and dropped, it is
-      a. added to the tabs list via the v-model binding (via Draggable)
-      b. removed from the otherTabs list
-        - TODO(prashanth@): I am not sure whether we should allow joining the
-        same tab on multiple fields. If we want to prevent this, we must
-        remove the tab from the otherTabs list.
-      c. the onDrop function is called
-      -->
-    <div class="fields">
-      <h4>Fields</h4>
-      <div
-      v-for="field in fields"
-      :key="field"
-      @drop="(e) => onFieldDrop(field, e)"
-      @dragover.prevent
-      @dragenter="(e) => onDragEnter(e)"
-      @dragleave="(e) => onDragLeave(e)"
-      class="field-drop-zone"
-      >
-        <strong>{{ field }}</strong>
-        <ul>
-          <li v-for="item in fieldMappings[field]" :key="item">
-            {{ item }}
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="draggable-tabs">
-      <h4>Draggable Tabs</h4>
-      <div class="tabs-list">
-        <div
-        v-for="tab in otherTabs"
-        :key="tab"
-        draggable="true"
-        @dragstart="(e) => onDragStart(tab, e)"
-        class="draggable-item">
-          {{ tab }}
+    <div class="layout-container">
+      <div class="draggable-tabs">
+        <h4>Available Tabs</h4>
+        <div class="tabs-list">
+          <div
+            v-for="tab in otherTabs"
+            :key="tab"
+            draggable="true"
+            @dragstart="(e) => onDragStart(tab, e)"
+            class="draggable-item"
+          >
+            {{ tab }}
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="json-preview">
-      <h4>Preview</h4>
-      <JsonViewer :value="computedJson" :expand-depth="5" theme="dark"/>
+      <div class="json-preview">
+        <h4>Preview</h4>
+        <!-- Custom JSON display with droppable fields -->
+        <div class="json-content">
+          <div
+            v-for="(value, key) in initialPreviewData"
+            :key="key"
+            class="json-field"
+            @drop="(e) => onFieldDrop(key, e)"
+            @dragover.prevent
+            @dragenter="(e) => onDragEnter(e)"
+            @dragleave="(e) => onDragLeave(e)"
+          >
+            <span class="json-key">{{ key }}:</span>
+            <span class="json-value">
+              <!-- If field has mappings, show them -->
+              <template v-if="fieldMappings[key]?.length">
+                [
+                  <span v-for="(tab, index) in fieldMappings[key]" :key="tab">
+                    {{ tab }}{{ index < fieldMappings[key].length - 1 ? ', ' : '' }}
+                  </span>
+                ]
+              </template>
+              <!-- Otherwise show original value -->
+              <template v-else>
+                {{ JSON.stringify(value) }}
+              </template>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { JsonViewer } from 'vue3-json-viewer';
-import "vue3-json-viewer/dist/index.css";
-import { defineProps } from 'vue';
+import { ref } from 'vue';
 
-// const tempJson = ref({
-//   name: "Test Object",
-//   number: 42,
-//   nested: {
-//     array: [1, 2, 3],
-//     string: "Hello World"
-//   },
-//   boolean: true
-// });
+import { defineProps } from 'vue';
 
 // props received:
 // - tabData: current tab's data (i.e fields or column names)
@@ -88,19 +72,18 @@ const props = defineProps({
   }
 });
 
+// Initialize with the first row of tabData
+const initialPreviewData = ref(props.tabData[0] || {});
+
+// Simplified fieldMappings (we don't need to pre-initialize all fields)
+const fieldMappings = ref({});
+
 // Reactive fields and data
 // - fields: list of fields in the current tab
 // - otherTabs: list of tabs excluding the current tab
 // - fieldMappings: map of fields to their corresponding tabs
-const fields = ref(Object.keys(props.tabData[0] || {}));
 const otherTabs = ref(
   Object.keys(props.allTabs).filter((tab) => tab !== props.tabData.name)
-);
-const fieldMappings = ref(
-  fields.value.reduce((acc, field) => {
-    acc[field] =[];
-    return acc;
-  }, {})
 );
 
 // Handle Drop event on field drop zones
@@ -131,61 +114,82 @@ const onDragStart = (tab, event) => {
 const onFieldDrop = (field, event) => {
   const draggedTab = event.dataTransfer.getData("text/plain");
   console.log("onFieldDrop", field, draggedTab);
-  if (draggedTab &&
-  !fieldMappings.value[field].includes(draggedTab)) {
+
+  // Initialize the array if it doesn't exist
+  if (!fieldMappings.value[field]) {
+    fieldMappings.value[field] = [];
+  }
+
+  // Add the dragged tab if it's not already mapped
+  if (draggedTab && !fieldMappings.value[field].includes(draggedTab)) {
     console.log("Adding", draggedTab, "to", field);
     fieldMappings.value[field].push(draggedTab);
   }
+
+  // Remove the drag-over class
+  event.target.closest('.json-field')?.classList.remove('drag-over');
 }
 
 const onDragEnter = (e) => {
-  e.target.closest('.field-drop-zone').classList.add('drag-over');
+  e.target.closest('.json-field')?.classList.add('drag-over');
 }
 
 const onDragLeave = (e) => {
-  e.target.closest('.field-drop-zone').classList.remove('drag-over');
+  e.target.closest('.json-field')?.classList.remove('drag-over');
 }
-
-// Compute Joined JSON
-const computedJson = computed(() => {
-  console.log("computedJson", props.tabData);
-  return props.tabData.map((row) => {
-    const joinedRow = { ...row };
-    Object.keys(fieldMappings.value).forEach((field) => {
-      const mappedTabs = fieldMappings.value[field];
-      joinedRow[field] = mappedTabs.map((tab) => props.allTabs[tab]);
-    });
-    console.log("joinedRow", joinedRow);
-    return joinedRow;
-  });
-});
 </script>
 
 <style scoped>
 .schema-engine {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
   padding: 20px;
-  border: 1px solid #ccc;
 }
 
-.fields {
+.layout-container {
   display: flex;
   gap: 20px;
-}
-
-.field-drop-zone {
-  border: 1px dashed #aaa;
-  padding: 10px;
-  min-height: 100px;
-  flex: 1;
-  background-color: #f9f9f9;
 }
 
 .draggable-tabs {
+  flex: 0 0 200px;
   border: 1px solid #ccc;
   padding: 10px;
+}
+
+.json-preview {
+  flex: 1;
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+
+.json-content {
+  font-family: monospace;
+  background: #1e1e1e;
+  color: #fff;
+  padding: 15px;
+  border-radius: 4px;
+}
+
+.json-field {
+  padding: 5px;
+  cursor: default;
+  transition: background-color 0.2s;
+}
+
+.json-field:hover {
+  background-color: #2a2a2a;
+}
+
+.json-key {
+  color: #9cdcfe;
+  margin-right: 8px;
+}
+
+.json-value {
+  color: #ce9178;
+}
+
+.json-field.drag-over {
+  background-color: #264f78;
 }
 
 .tabs-list {
@@ -210,12 +214,6 @@ const computedJson = computed(() => {
 .field-drop-zone.drag-over {
   background-color: #e9f5ff;
   border-color: #2196f3
-}
-
-.json-preview {
-  border: 1px solid #ccc;
-  padding: 10px;
-  background-color: #fff;
 }
 
 </style>
