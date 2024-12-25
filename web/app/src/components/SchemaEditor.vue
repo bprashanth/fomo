@@ -1,219 +1,104 @@
 <template>
-  <div class="schema-engine">
-    <h3>Editing Schema for Tab: {{ tabData.name }}</h3>
+  <div class="schema-editor">
+    <div class="fields-container">
 
-    <div class="layout-container">
-      <div class="draggable-tabs">
-        <h4>Available Tabs</h4>
-        <div class="tabs-list">
-          <div
-            v-for="tab in otherTabs"
-            :key="tab"
-            draggable="true"
-            @dragstart="(e) => onDragStart(tab, e)"
-            class="draggable-item"
-          >
-            {{ tab }}
+      <!-- Child Dataset -->
+      <div class="fields-section child-fields">
+        <h5>Child Fields</h5>
+        <div class="fields-list">
+          <div v-for="field in childFields" :key="field" class="field-card">
+            {{ field }}
           </div>
         </div>
       </div>
 
-      <div class="json-preview">
-        <h4>Preview</h4>
-        <!-- Custom JSON display with droppable fields -->
-        <div class="json-content">
-          <div
-            v-for="(value, key) in initialPreviewData"
-            :key="key"
-            class="json-field"
-            @drop="(e) => onFieldDrop(key, e)"
-            @dragover.prevent
-            @dragenter="(e) => onDragEnter(e)"
-            @dragleave="(e) => onDragLeave(e)"
-          >
-            <span class="json-key">{{ key }}:</span>
-            <span class="json-value">
-              <!-- If field has mappings, show them -->
-              <template v-if="fieldMappings[key]?.length">
-                [
-                  <span v-for="(tab, index) in fieldMappings[key]" :key="tab">
-                    {{ tab }}{{ index < fieldMappings[key].length - 1 ? ', ' : '' }}
-                  </span>
-                ]
-              </template>
-              <!-- Otherwise show original value -->
-              <template v-else>
-                {{ JSON.stringify(value) }}
-              </template>
-            </span>
+      <!-- Parent Dataset -->
+      <div class="fields-section parent-fields">
+        <h5>Parent Fields</h5>
+        <div class="fields-list">
+          <div v-for="field in parentFields" :key="field" class="field-card">
+            {{ field }}
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-
 import { defineProps } from 'vue';
 
-// props received:
-// - tabData: current tab's data (i.e fields or column names)
-// - allTabs: data from all available tabs
-const props = defineProps({
-  tabData: {
-    type: Object,
-    required: true
-  },
-  allTabs: {
-    type: Object,
-    required: true
-  }
+defineProps({
+  childFields: Array,
+  parentFields: Array,
 });
-
-// Initialize with the first row of tabData
-const initialPreviewData = ref(props.tabData[0] || {});
-
-// Simplified fieldMappings (we don't need to pre-initialize all fields)
-const fieldMappings = ref({});
-
-// Reactive fields and data
-// - fields: list of fields in the current tab
-// - otherTabs: list of tabs excluding the current tab
-// - fieldMappings: map of fields to their corresponding tabs
-const otherTabs = ref(
-  Object.keys(props.allTabs).filter((tab) => tab !== props.tabData.name)
-);
-
-// Handle Drop event on field drop zones
-// onDragStart:
-// - When a draggable item is picked up, the @dragstart event is triggered
-// - We use this to set the dataTransfer object with the tab name
-//
-// onFieldDrop:
-// - When the item is dropped onto a field, the @drop event is triggered
-// - The draggedTab name is retrieved from the dataTransfer object
-// - We then add the draggedTab to the field's mapping if it is not already
-//    present
-//
-// onDragEnter:
-// - When the draggable item is hovered over a field, the @dragenter event is
-//   triggered
-// - We use this to highlight the field
-//
-// onDragLeave:
-// - When the draggable item is no longer hovered over a field, the @dragleave
-//   event is triggered
-// - We use this to unhighlight the field
-const onDragStart = (tab, event) => {
-  console.log("onDragStart", tab);
-  event.dataTransfer.setData("text/plain", tab);
-}
-
-const onFieldDrop = (field, event) => {
-  const draggedTab = event.dataTransfer.getData("text/plain");
-  console.log("onFieldDrop", field, draggedTab);
-
-  // Initialize the array if it doesn't exist
-  if (!fieldMappings.value[field]) {
-    fieldMappings.value[field] = [];
-  }
-
-  // Add the dragged tab if it's not already mapped
-  if (draggedTab && !fieldMappings.value[field].includes(draggedTab)) {
-    console.log("Adding", draggedTab, "to", field);
-    fieldMappings.value[field].push(draggedTab);
-  }
-
-  // Remove the drag-over class
-  event.target.closest('.json-field')?.classList.remove('drag-over');
-}
-
-const onDragEnter = (e) => {
-  e.target.closest('.json-field')?.classList.add('drag-over');
-}
-
-const onDragLeave = (e) => {
-  e.target.closest('.json-field')?.classList.remove('drag-over');
-}
 </script>
 
 <style scoped>
-.schema-engine {
-  padding: 20px;
-}
-
-.layout-container {
+.schema-editor {
   display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  width: 100%;
+  max-width: 800px;
+  height: 60vh;
+}
+
+.fields-container {
+  display: flex;
+  width: 100%;
   gap: 20px;
+  height: 100%;
 }
 
-.draggable-tabs {
-  flex: 0 0 200px;
-  border: 1px solid #ccc;
-  padding: 10px;
-}
-
-.json-preview {
+.fields-section {
   flex: 1;
-  border: 1px solid #ccc;
-  padding: 10px;
-}
-
-.json-content {
-  font-family: monospace;
-  background: #1e1e1e;
-  color: #fff;
-  padding: 15px;
-  border-radius: 4px;
-}
-
-.json-field {
-  padding: 5px;
-  cursor: default;
-  transition: background-color 0.2s;
-}
-
-.json-field:hover {
-  background-color: #2a2a2a;
-}
-
-.json-key {
-  color: #9cdcfe;
-  margin-right: 8px;
-}
-
-.json-value {
-  color: #ce9178;
-}
-
-.json-field.drag-over {
-  background-color: #264f78;
-}
-
-.tabs-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  overflow: hidden;
 }
 
-.draggable-item {
+.fields-section h5 {
+  margin-bottom: 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 18px;
+  text-transform: uppercase;
+  color: #7e748f;
+  font-family: monospace;
+}
+
+.fields-list {
+  flex: 1;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.field-card {
+  padding: 10px;
   margin: 5px 0;
-  padding: 8px;
-  border: 1px solid #ccc;
-  background-color: #f5f5f5;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  color: #7e748f;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: monospace;
+  text-align: left;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   cursor: grab;
-  transition: background-color 0.2s;
+  transition: background 0.3s ease, transform 0.3s ease;
 }
 
-.draggable-item:hover {
-  background-color: #eee;
-}
-
-.field-drop-zone.drag-over {
-  background-color: #e9f5ff;
-  border-color: #2196f3
+.field-card:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 </style>
