@@ -5,7 +5,13 @@
       <!-- Child Dataset -->
       <div class="fields-section child-fields">
         <div class="fields-list">
-          <div v-for="field in getIdFields(childFields)" :key="field" class="field-card">
+          <div
+          v-for="field in getIdFields(props.childFields)"
+          :key="field"
+          class="field-card"
+          draggable="true"
+          @dragstart="handleDragStart(field)"
+          >
             {{ field }}
           </div>
         </div>
@@ -14,8 +20,28 @@
       <!-- Parent Dataset -->
       <div class="fields-section parent-fields">
         <div class="fields-list">
-          <div v-for="field in getIdFields(parentFields)" :key="field" class="field-card">
-            {{ field }}
+          <div
+          v-for="fieldName in getIdFields(props.parentFields)"
+          :key="fieldName"
+          class="field-card"
+          @dragover.prevent
+          @drop="handleDrop(fieldName)"
+          >
+            {{ fieldName }}
+
+            <!-- Redner joined sub-fields -->
+            <div
+            v-if="getJoinsForField(fieldName).length"
+            class="sub-field-list"
+            >
+              <div
+              v-for="join in getJoinsForField(fieldName)"
+              :key="join"
+              class="sub-field-card"
+              >
+                {{ join }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -25,11 +51,31 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue';
+import { defineProps, ref, watchEffect } from 'vue';
 
-defineProps({
+const props = defineProps({
   childFields: Array,
   parentFields: Array,
+  childTabSelected: String,
+  separator: String,
+});
+
+// State tracking each parent field with their dropped child fields.
+// TODO: do we need to save state across parent tab changes?
+const parentFieldsWithJoins = ref([]);
+
+// On the use of watchEffect:
+// watchEffect runs whenever one of the refs used within it changes.
+// It also runs at mount time. If we had simply tried to initialize
+// parentFieldsWithJoins at mount time, it would have been empty.
+// watchEffect clears the joins array whenever the parent tab is switched,
+// meaning users will have to re-do their joins on switching back.
+watchEffect(() => {
+  console.log('Separator prop:', props.separator);
+  parentFieldsWithJoins.value = props.parentFields.map((field) => ({
+    name: field,
+    joins: [],
+  }));
 });
 
 // Get fields that end with 'id'
@@ -41,6 +87,58 @@ defineProps({
 const getIdFields = (fields) => {
   return fields.filter(field => field.toLowerCase().endsWith('id'));
 }
+
+// Helper function to get the joins for a given parent field.
+// @param {String} fieldName: The name of the parent field.
+// @returns {Array} - The joins for the parent field - i.e the child fields
+//  dropped onto this parent field.
+const getJoinsForField = (fieldName) => {
+  const parentField = parentFieldsWithJoins.value.find(
+    (field) => field.name === fieldName
+  );
+  return parentField ? parentField.joins : [];
+};
+
+// State tracking the name of the child field being dragged.
+const draggedField = ref(null);
+
+// Record the name of the child field being dragged.
+//
+// @param {String} field: The name of the field being dragged.
+const handleDragStart = (field) => {
+  draggedField.value = field;
+};
+
+// Handle the drop event for the parent field.
+//
+// The "from" field is the child field that is being dragged. This field is
+// stored in draggedField on dropStart. Each parent field has an array of
+// "joins" or fields that have been dropped on it. We use the parentFieldName
+// to lookup the right Join array and add the draggedField to it.
+//
+// @param {String} parentFieldName: The name of the field receiving the drop.
+const handleDrop = (parentFieldName) => {
+  console.log('handling drop');
+  if (!draggedField.value) {
+    console.error('No field to drop');
+    return;
+  }
+  const parentField = parentFieldsWithJoins.value.find(
+    (field) => field.name === parentFieldName
+  );
+  if (!parentField) {
+    console.error('Parent field not found');
+    return;
+  }
+  if (parentField.joins.includes(draggedField.value)) {
+    console.warning('Field already joined');
+    return;
+  }
+  parentField.joins.push(
+    props.childTabSelected + props.separator + draggedField.value);
+  draggedField.value = null;
+}
+
 </script>
 
 <style scoped>
@@ -103,7 +201,7 @@ const getIdFields = (fields) => {
 }
 
 .field-card:hover {
-    background-color: #A8D8D433;
+  background-color: #A8D8D433;
 
   transform: translateY(-2px);
 }

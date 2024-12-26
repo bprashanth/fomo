@@ -33,6 +33,8 @@
         v-if="parentFields && childFields"
         :parentFields="parentFields"
         :childFields="childFields"
+        :childTabSelected="childTabSelected"
+        :separator="separator"
       />
       <hr class="divider">
       <TabComponent
@@ -54,19 +56,34 @@ import SchemaEditor from './components/SchemaEditor.vue';
 const tabs = ref([]);
 const parentFields = ref([]);
 const childFields = ref([]);
+const childTabSelected = ref(null);
+
+// Separator used to join the child tab name with the child field name.
+// TODO: What do we do if the child tab name contains a '.'? maybe this should
+// be a prop.
+const separator = ref('.');
 
 const handleFileParsed = (parsedData) => {
   tabs.value = parsedData;
 }
 
+// Looks up the column names of the parent tab and passes it to the
+// schema editor.
+// @param {Object} tab: The tab object from the excel file.
+// @param {Array} columns: The column names of the tab.
 const handleParentTabSelected = ({tab, columns}) => {
   console.log("Parent tab selected", tab, columns);
   parentFields.value = columns;
 }
 
+// Looks up the column names of the child tab and passes it to the
+// schema editor.
+// @param {Object} tab: The tab object from the excel file.
+// @param {Array} columns: The column names of the tab.
 const handleChildTabSelected = ({tab, columns}) => {
   console.log("Child tab selected", tab, columns);
   childFields.value = columns;
+  childTabSelected.value = tab;
 }
 </script>
 
@@ -126,5 +143,25 @@ const handleChildTabSelected = ({tab, columns}) => {
   border: none;
   border-top: 1px solid rgba(73, 94, 92, 0.4);
   margin: 1rem 0;
+}
+</style>
+
+<style>
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(148, 186, 182, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(73, 94, 92, 0.6);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(73, 94, 92, 0.8);
 }
 </style>

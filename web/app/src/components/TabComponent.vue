@@ -49,27 +49,34 @@ const selectTab = (tab, columns) => {
 
 .tab {
   padding: 10px 20px;
-  background: #ffffff52;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-
-  color: #48817e;
+  background: rgba(46, 83, 81, 0.35);
+  border: 1px solid rgba(46, 83, 81, 0.3);
+  color: #CBE9E7;
   cursor: pointer;
   font-weight: 600;
   font-size: 18px;
   text-transform: uppercase;
-  transition: background 0.3s ease, border-color 0.3s ease;
+  transition: all 0.3s ease;
   border-radius: 5px;
-
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
 }
 
 .tab:hover {
-  background: #A8D8D433;
-  background-color: #A8D8D433;
+  background: rgba(168, 216, 212, 0.2);
+  border-color: rgba(168, 216, 212, 0.3);
+  color: #FFFFFF;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
 }
 
 .tab.active {
-  background: #2E535133;
-  border-color: #2E535133;
+  background: rgba(46, 83, 81, 0.6);
+  border-color: rgba(46, 83, 81, 0.7);
+  color: #CBE9E7;
   font-weight: bold;
+
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+  border-bottom: 3px solid #A8D8D4;
 }
 </style>
