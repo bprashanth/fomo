@@ -28,11 +28,13 @@
         title="Parent Dataset"
         @tabSelected="handleParentTabSelected"
       />
+      <hr class="divider">
       <SchemaEditor
         v-if="parentFields && childFields"
         :parentFields="parentFields"
         :childFields="childFields"
       />
+      <hr class="divider">
       <TabComponent
         v-if="tabs"
         :tabs="tabs"
@@ -86,7 +88,7 @@ const handleChildTabSelected = ({tab, columns}) => {
 #app {
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  /* overflow: hidden; */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -113,5 +115,16 @@ const handleChildTabSelected = ({tab, columns}) => {
   filter: blur(5px);
   transform: scale(1.1);
   z-index: -1;
+}
+
+.content {
+  padding-top: 70px;
+}
+
+.divider {
+  width: 100%;
+  border: none;
+  border-top: 1px solid rgba(73, 94, 92, 0.4);
+  margin: 1rem 0;
 }
 </style>

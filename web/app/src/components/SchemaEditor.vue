@@ -4,9 +4,8 @@
 
       <!-- Child Dataset -->
       <div class="fields-section child-fields">
-        <h5>Child Fields</h5>
         <div class="fields-list">
-          <div v-for="field in childFields" :key="field" class="field-card">
+          <div v-for="field in getIdFields(childFields)" :key="field" class="field-card">
             {{ field }}
           </div>
         </div>
@@ -14,9 +13,8 @@
 
       <!-- Parent Dataset -->
       <div class="fields-section parent-fields">
-        <h5>Parent Fields</h5>
         <div class="fields-list">
-          <div v-for="field in parentFields" :key="field" class="field-card">
+          <div v-for="field in getIdFields(parentFields)" :key="field" class="field-card">
             {{ field }}
           </div>
         </div>
@@ -33,6 +31,16 @@ defineProps({
   childFields: Array,
   parentFields: Array,
 });
+
+// Get fields that end with 'id'
+// @param {Array} fields: The fields to filter, typically the column
+//  names in an excel sheet.
+// @returns {Array} - The fields that end with 'id'.
+// @TODO: This is a temporary solution. We need to find a better way to
+//  identify the fields that are IDs.
+const getIdFields = (fields) => {
+  return fields.filter(field => field.toLowerCase().endsWith('id'));
+}
 </script>
 
 <style scoped>
@@ -73,18 +81,12 @@ defineProps({
 .fields-list {
   flex: 1;
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 10px;
-  border-radius: 5px;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .field-card {
   padding: 10px;
   margin: 5px 0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 5px;
   color: #7e748f;
   font-size: 14px;
@@ -94,10 +96,15 @@ defineProps({
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   cursor: grab;
   transition: background 0.3s ease, transform 0.3s ease;
+
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .field-card:hover {
-  background: rgba(255, 255, 255, 0.2);
+    background-color: #A8D8D433;
+
   transform: translateY(-2px);
 }
 
