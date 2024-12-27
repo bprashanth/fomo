@@ -1,9 +1,10 @@
 <!-- App.vue
 
-  FileUpload.vue -> @fileParsed -> :tabs
+  FileUpload.vue -> @fileParsed -> :tabs, :fullData
   :tabs -> TabComponent.vue -> @tabSelected -> :parentFields
   :tabs -> TabComponent.vue -> @tabSelected -> :childFields
-  :parentFields, :childFields -> SchemaEditor.vue
+  :parentFields, :childFields -> SchemaEditor.vue -> @joinFields
+  :fullData, :parentFieldsWithJoins -> JsonViewer.vue
 
   * FileUpload.vue:
     - User uploads an excel file
@@ -25,23 +26,33 @@
       <TabComponent
         v-if="tabs"
         :tabs="tabs"
-        title="Parent Dataset"
-        @tabSelected="handleParentTabSelected"
+        title="Child Dataset"
+        @tabSelected="handleChildTabSelected"
       />
       <hr class="divider">
-      <SchemaEditor
-        v-if="parentFields && childFields"
-        :parentFields="parentFields"
-        :childFields="childFields"
-        :childTabSelected="childTabSelected"
-        :separator="separator"
-      />
+      <div class="schema-section">
+        <SchemaEditor
+          v-if="parentFields && childFields"
+          :parentFields="parentFields"
+          :childFields="childFields"
+          :childTabSelected="childTabSelected"
+          :separator="separator"
+          @parentFieldsWithJoins="handleParentFieldsWithJoins"
+        />
+        <div class="json-viewer-wrapper">
+          <JsonViewer
+            :fullData="fullData"
+            :parentTab="parentTabSelected"
+            :parentFieldsWithJoins="parentFieldsWithJoins"
+          />
+        </div>
+      </div>
       <hr class="divider">
       <TabComponent
         v-if="tabs"
         :tabs="tabs"
-        title="Child Dataset"
-        @tabSelected="handleChildTabSelected"
+        title="Parent Dataset"
+        @tabSelected="handleParentTabSelected"
       />
     </div>
   </div>
@@ -52,19 +63,24 @@ import { ref } from 'vue';
 import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
-
+import JsonViewer from './components/JsonViewer.vue';
 const tabs = ref([]);
 const parentFields = ref([]);
 const childFields = ref([]);
 const childTabSelected = ref(null);
+const parentTabSelected = ref(null);
+const fullData = ref({});
+const parentFieldsWithJoins = ref([]);
 
 // Separator used to join the child tab name with the child field name.
 // TODO: What do we do if the child tab name contains a '.'? maybe this should
 // be a prop.
 const separator = ref('.');
 
+// Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
-  tabs.value = parsedData;
+  tabs.value = parsedData.headerData;
+  fullData.value = parsedData.fullData;
 }
 
 // Looks up the column names of the parent tab and passes it to the
@@ -74,6 +90,7 @@ const handleFileParsed = (parsedData) => {
 const handleParentTabSelected = ({tab, columns}) => {
   console.log("Parent tab selected", tab, columns);
   parentFields.value = columns;
+  parentTabSelected.value = tab;
 }
 
 // Looks up the column names of the child tab and passes it to the
@@ -85,6 +102,13 @@ const handleChildTabSelected = ({tab, columns}) => {
   childFields.value = columns;
   childTabSelected.value = tab;
 }
+
+// Handles the schema editor components emitted data.
+const handleParentFieldsWithJoins = (parentFieldsWithJoins) => {
+  console.log("Parent fields with joins", parentFieldsWithJoins);
+  parentFieldsWithJoins.value = parentFieldsWithJoins;
+}
+
 </script>
 
 <style scoped>
@@ -101,11 +125,18 @@ const handleChildTabSelected = ({tab, columns}) => {
  *
  * Content styling
  * - All the content positioning is achieved via display: flex on the parent.
+ * - The main content area, the schema-section, is restricted to 60% of viewport
+ * - :deep(> *) are used to target all children (similar to .first-child)
+ * - flex: 1 is used on all children via :deep, to tell flexbox to distribute
+ *    the available space evenly.
+ * - A note on flex: 1: applying it on one child  means "first size the other
+ *    children, then take up the remaining space for this child". Applying it
+ *    to all children means "size each child equally".
  */
 #app {
   min-height: 100vh;
   position: relative;
-  /* overflow: hidden; */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -144,10 +175,36 @@ const handleChildTabSelected = ({tab, columns}) => {
   border-top: 1px solid rgba(73, 94, 92, 0.4);
   margin: 1rem 0;
 }
+
+.schema-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  width: 60vh;
+  width: 100%;
+  gap: 1rem;
+}
+
+.schema-section :deep(> *) {
+  flex: 1;
+  min-height: 0;
+}
+
+.json-viewer-wrapper {
+  width: 80%;
+  max-width: 600px;
+  min-width: 300px;
+}
 </style>
 
 <style>
-/* Custom Scrollbar Styling */
+/* Custom Scrollbar Styling
+ * - This is a global style that applies to all scrollbars in the app.
+ *   Hence it's in the style and not style scoped, and its in the root app
+ *   element.
+ */
 ::-webkit-scrollbar {
   width: 10px;
 }

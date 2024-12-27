@@ -5,9 +5,16 @@
   @props: none
   @emits: fileParsed
     {
-      sheetName1: [columnName1, columnName2, ...],
-      sheetName2: [columnName1, columnName2, ...],
-      ...
+      fullData: {
+        sheetName1: {sheetJson},
+        sheetName2: {sheetJson},
+        ...
+      },
+      headerData: {
+        sheetName1: [columnName1, columnName2, ...],
+        sheetName2: [columnName1, columnName2, ...],
+        ...
+      }
     }
   @TODO:
   - Handle multiple file uploads
@@ -45,15 +52,33 @@ const handleFileUpload = (event) => {
     reader.onload = (e) => {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, {type: 'array'});
-        const parsedData = {};
+
+        // Create two objects: one for full data, one for column headers
+        const fullData = {};
+        const headerData = {};
 
         workbook.SheetNames.forEach((sheetName) => {
-          const sheetJson = XLSX.utils.sheet_to_json(
-            workbook.Sheets[sheetName], {header: 1,});
-          parsedData[sheetName] = sheetJson[0];
+          const sheet = workbook.Sheets[sheetName];
+          // Get data with header: 1 to get array format first
+          const rawSheetJson = XLSX.utils.sheet_to_json(sheet, {header: 1});
+
+          // Transform the data into objects
+          const headers = rawSheetJson[0];
+          const sheetJson = rawSheetJson.slice(1).map(row => {
+            return headers.reduce((obj, header, index) => {
+              obj[header] = row[index];
+              return obj;
+            }, {});
+          });
+
+          // Store full dataset
+          fullData[sheetName] = sheetJson;
+          // Store just the headers (first row)
+          headerData[sheetName] = headers;
         })
 
-        emit('fileParsed', parsedData);
+        // Emit both the full data and the headers
+        emit('fileParsed', { fullData, headerData });
     };
     reader.readAsArrayBuffer(file);
 };

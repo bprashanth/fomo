@@ -1,3 +1,24 @@
+<!-- SchemaEditor.vue
+  - Displays the parent+child columns
+  - Processes the join logic
+
+  The idea behind this component is to allow users to "join" across tabs in an excel. To do this, we pick a base sheet, and process drag and drop column names from other sheets to express the join logic.
+
+  @props:
+    - parentFields: Array of strings - the column names in the parent dataset
+    - childFields: Array of strings - the column names in the child dataset
+    - childTabSelected: String - the name of the currently selected child tab
+    - separator: String - the separator used to join tabName.columnName
+
+  @emits:
+    - parentFieldsWithJoins: Array of objects - ALL parent fields + their joined child fields (i.e fields that have been dropped on them). The joined child fields can currently only contain "id" fields.
+
+  @TODO:
+    - This component only displays column names with the "id" suffix. We need
+      to find a better way to identify the foreign keys.
+    - We need to add a "remove" button to each sub-field card. This should
+      trigger a suggestive hover style.
+-->
 <template>
   <div class="schema-editor">
     <div class="fields-container">
@@ -51,7 +72,7 @@
 </template>
 
 <script setup>
-import { defineProps, ref, watchEffect } from 'vue';
+import { defineProps, ref, watchEffect, defineEmits } from 'vue';
 
 const props = defineProps({
   childFields: Array,
@@ -59,6 +80,9 @@ const props = defineProps({
   childTabSelected: String,
   separator: String,
 });
+
+// This emit is used to update the JsonViewer from the parent.
+const emit = defineEmits(['parentFieldsWithJoins']);
 
 // State tracking each parent field with their dropped child fields.
 // TODO: do we need to save state across parent tab changes?
@@ -137,19 +161,26 @@ const handleDrop = (parentFieldName) => {
   parentField.joins.push(
     props.childTabSelected + props.separator + draggedField.value);
   draggedField.value = null;
+
+  emit('parentFieldsWithJoins', parentFieldsWithJoins.value);
 }
 
 </script>
 
 <style scoped>
+/*
+ * SchemaEditor styling
+ *  - The fields-container holds the parent and child panels side by side
+ *  - The fields-section holds the fields list
+ *  - The field-card is styling for each field name (div)
+ */
 .schema-editor {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+  padding: 0px 20px 0 20px;
   width: 100%;
   max-width: 800px;
-  height: 60vh;
 }
 
 .fields-container {
@@ -164,16 +195,6 @@ const handleDrop = (parentFieldName) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.fields-section h5 {
-  margin-bottom: 10px;
-  text-align: left;
-  font-weight: 600;
-  font-size: 18px;
-  text-transform: uppercase;
-  color: #7e748f;
-  font-family: monospace;
 }
 
 .fields-list {
@@ -202,8 +223,23 @@ const handleDrop = (parentFieldName) => {
 
 .field-card:hover {
   background-color: #A8D8D433;
-
   transform: translateY(-2px);
+}
+
+.sub-field-list {
+  margin-top: 10px;
+  padding-left: 10px;
+}
+
+.sub-field-card {
+  background: rgba(126, 116, 143, 0.1);
+  border-radius: 4px;
+  padding: 5px;
+  margin-top: 5px;
+  font-size: 12px;
+  text-transform: lowercase;
+
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 </style>
