@@ -58,3 +58,6 @@ venv/
 
 # .git
 .git/
+
+# recursive ignore of node_modules 
+node_modules
