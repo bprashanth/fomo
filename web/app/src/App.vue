@@ -21,7 +21,7 @@
 <template>
   <div id="app">
     <div class="background"></div>
-    <div class="content">
+    <div class="content" :class="{ 'dragging': isJsonViewerOpen }">
       <FileUpload @fileParsed="handleFileParsed" />
       <TabComponent
         v-if="tabs"
@@ -29,31 +29,41 @@
         title="Child Dataset"
         @tabSelected="handleChildTabSelected"
       />
-      <hr class="divider">
       <div class="schema-section">
         <SchemaEditor
-          v-if="parentFields && childFields"
+          v-if="parentFields.length && childFields.length"
           :parentFields="parentFields"
           :childFields="childFields"
           :childTabSelected="childTabSelected"
           :separator="separator"
           @parentFieldsWithJoins="handleParentFieldsWithJoins"
         />
-        <div class="json-viewer-wrapper">
-          <JsonViewer
-            :fullData="fullData"
-            :parentTab="parentTabSelected"
-            :parentFieldsWithJoins="parentFieldsWithJoins"
-          />
-        </div>
       </div>
-      <hr class="divider">
       <TabComponent
         v-if="tabs"
         :tabs="tabs"
         title="Parent Dataset"
         @tabSelected="handleParentTabSelected"
       />
+    </div>
+
+    <div
+    class="json-viewer-wrapper"
+    :class="{ 'expanded': isJsonViewerOpen }"
+    >
+      <JsonViewer
+        :fullData="fullData"
+        :parentTab="parentTabSelected"
+        :parentFieldsWithJoins="parentFieldsWithJoins"
+      />
+    </div>
+
+    <div
+    class="file-edge"
+    @click="toggleJsonViewer"
+    :class="{ 'expanded': isJsonViewerOpen }"
+    >
+      <span class="file-label">data</span>
     </div>
   </div>
 </template>
@@ -76,6 +86,8 @@ const parentFieldsWithJoins = ref([]);
 // TODO: What do we do if the child tab name contains a '.'? maybe this should
 // be a prop.
 const separator = ref('.');
+
+const isJsonViewerOpen = ref(false);
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -109,6 +121,9 @@ const handleParentFieldsWithJoins = (parentFieldsWithJoins) => {
   parentFieldsWithJoins.value = parentFieldsWithJoins;
 }
 
+const toggleJsonViewer = () => {
+  isJsonViewerOpen.value = !isJsonViewerOpen.value;
+};
 </script>
 
 <style scoped>
@@ -129,18 +144,20 @@ const handleParentFieldsWithJoins = (parentFieldsWithJoins) => {
  * - :deep(> *) are used to target all children (similar to .first-child)
  * - flex: 1 is used on all children via :deep, to tell flexbox to distribute
  *    the available space evenly.
- * - A note on flex: 1: applying it on one child  means "first size the other
+ * - A note on flex: 1: Applying it on one child  means "first size the other
  *    children, then take up the remaining space for this child". Applying it
  *    to all children means "size each child equally".
+ * - The content area is shifted to the left when the json viewer is open.
+ *   This is achieved by adding a class to the content area (.expanded) and
+ *   using CSS transitions to animate the margin-right property.
+ * - The file edge is positioned absolutely and moves with the json viewer in
+ *   a similar manner.
  */
 #app {
   min-height: 100vh;
   position: relative;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
 .background {
@@ -166,7 +183,13 @@ const handleParentFieldsWithJoins = (parentFieldsWithJoins) => {
 }
 
 .content {
+  flex: 1;
   padding-top: 70px;
+  transition: margin-right 0.3s ease;
+}
+
+.content.shifted {
+  margin-right: 25%;
 }
 
 .divider {
@@ -193,10 +216,59 @@ const handleParentFieldsWithJoins = (parentFieldsWithJoins) => {
 }
 
 .json-viewer-wrapper {
-  width: 80%;
-  max-width: 600px;
-  min-width: 300px;
+  width: 15px;
+  background-color: #151515;
+  height: 100%;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  right: 0;
+  top: 0;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  transition: width 0.5s ease;
+  z-index: 5;
 }
+
+.json-viewer-wrapper.expanded {
+  width: 25%;
+}
+
+/* File Edge keeps up with the json-viewer-wrapper */
+.file-edge.expanded {
+  right: 25%;
+}
+
+.file-edge {
+  width: 20px;
+  max-width: 20px;
+  height: 60px;
+  background-color: #9c7b59;
+  border-radius: 5px 0 0 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  position: absolute;
+  right: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: right 0.5s ease;
+}
+
+.file-label {
+  font-family: monospace;
+  font-size: 10px;
+  color: #151515;
+  background-color: #C6C7C9;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transform: rotate(-90deg);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: left center;
+}
+
 </style>
 
 <style>
