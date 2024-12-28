@@ -176,8 +176,6 @@ const handleDrop = (parentFieldName) => {
  */
 .schema-editor {
   display: flex;
-  justify-content: center;
-  align-items: center;
   padding: 0px 20px 0 20px;
   width: 100%;
   max-width: 800px;

@@ -29,9 +29,9 @@
         title="Child Dataset"
         @tabSelected="handleChildTabSelected"
       />
-      <div class="schema-section">
+      <div class="schema-section"
+      v-if="tabs">
         <SchemaEditor
-          v-if="parentFields.length && childFields.length"
           :parentFields="parentFields"
           :childFields="childFields"
           :childTabSelected="childTabSelected"
@@ -74,7 +74,7 @@ import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
 import JsonViewer from './components/JsonViewer.vue';
-const tabs = ref([]);
+const tabs = ref(null);
 const parentFields = ref([]);
 const childFields = ref([]);
 const childTabSelected = ref(null);
@@ -158,6 +158,8 @@ const toggleJsonViewer = () => {
   position: relative;
   overflow: hidden;
   display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .background {
@@ -183,7 +185,7 @@ const toggleJsonViewer = () => {
 }
 
 .content {
-  flex: 1;
+  /* flex: 1; */
   padding-top: 70px;
   transition: margin-right 0.3s ease;
 }
@@ -204,9 +206,8 @@ const toggleJsonViewer = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 60vh;
-  width: 60vh;
-  width: 100%;
+  min-height: 60vh;
+  min-width: 60vh;
   gap: 1rem;
 }
 
@@ -248,6 +249,7 @@ const toggleJsonViewer = () => {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   position: absolute;
   right: 15px;
+  top: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
