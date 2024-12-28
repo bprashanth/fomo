@@ -1,8 +1,8 @@
 <!-- App.vue
 
   FileUpload.vue -> @fileParsed -> :tabs, :fullData
-  :tabs -> TabComponent.vue -> @tabSelected -> :parentFields
   :tabs -> TabComponent.vue -> @tabSelected -> :childFields
+  :tabs -> TabComponent.vue -> @tabReordered -> :parentFields
   :parentFields, :childFields -> SchemaEditor.vue -> @joinFields
   :fullData, :parentFieldsWithJoins -> JsonViewer.vue
 
@@ -12,7 +12,9 @@
 
   * TabComponent.vue:
     - Displays the tabs from the excel file
-    - Emits the selected tab+columns to the parent component
+    - Emits the selected tab+columns to the child component
+    - Emits the last tab+columns to the parent component (this is emitted on
+      every drag/drop)
 
   * SchemaEditor.vue:
     - Displays the parent+child columns
@@ -28,9 +30,9 @@
         :tabs="tabs"
         title="Child Dataset"
         @tabSelected="handleChildTabSelected"
+        @tabReordered="handleParentTabSelected"
       />
-      <div class="schema-section"
-      v-if="tabs">
+      <div class="schema-section" v-if="tabs">
         <SchemaEditor
           :parentFields="parentFields"
           :childFields="childFields"
@@ -39,12 +41,6 @@
           @parentFieldsWithJoins="handleParentFieldsWithJoins"
         />
       </div>
-      <TabComponent
-        v-if="tabs"
-        :tabs="tabs"
-        title="Parent Dataset"
-        @tabSelected="handleParentTabSelected"
-      />
     </div>
 
     <div
@@ -185,7 +181,6 @@ const toggleJsonViewer = () => {
 }
 
 .content {
-  /* flex: 1; */
   padding-top: 70px;
   transition: margin-right 0.3s ease;
 }
