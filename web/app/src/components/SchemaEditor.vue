@@ -95,7 +95,9 @@ const parentFieldsWithJoins = ref([]);
 // watchEffect clears the joins array whenever the parent tab is switched,
 // meaning users will have to re-do their joins on switching back.
 watchEffect(() => {
-  console.log('Separator prop:', props.separator);
+  if (!props.parentFields) {
+    return;
+  }
   parentFieldsWithJoins.value = props.parentFields.map((field) => ({
     name: field,
     joins: [],
@@ -109,6 +111,9 @@ watchEffect(() => {
 // @TODO: This is a temporary solution. We need to find a better way to
 //  identify the fields that are IDs.
 const getIdFields = (fields) => {
+  if (!fields) {
+    return [];
+  }
   return fields.filter(field => field.toLowerCase().endsWith('id'));
 }
 

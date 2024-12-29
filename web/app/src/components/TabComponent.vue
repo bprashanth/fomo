@@ -29,14 +29,12 @@
         <li
         :class="{
           'active': tab === selectedTab,
-          'last-tab': idx === localTabs.length - 1
+          'last-tab': idx === localTabs.length - 1 && draggedTab
         }"
         class="tab"
         @click="selectTab(tab, columns)"
         >
-        <span :class="{ 'truncate-text': idx === localTabs.length - 1}">
           {{ tab }}
-        </span>
         </li>
       </template>
     </draggable>
@@ -44,7 +42,7 @@
 </template>
 
 <script setup>
-import { defineProps, ref, defineEmits } from 'vue';
+import { defineProps, ref, defineEmits, onMounted } from 'vue';
 import draggable from 'vuedraggable';
 
 const props = defineProps({
@@ -55,9 +53,20 @@ const props = defineProps({
 const emit = defineEmits(['tabSelected', 'tabReordered']);
 const selectedTab = ref(null);
 
+// Stores the tab dragged and triggers the application of lastTab styling.
+const draggedTab = ref(null);
+
 const localTabs = ref(
   Object.entries(props.tabs).map(([tab, columns]) => ({ tab, columns }))
 );
+
+onMounted(() => {
+  const lastTab = localTabs.value.at(-1);
+  if (lastTab) {
+    // emit('tabReordered', { tab: lastTab.tab, columns: lastTab.columns });
+    console.log('lastTab', lastTab);
+  }
+});
 
 // Handler for tab click, emits the selected tab+columns.
 // Does not emit if the tab is already selected or the last tab.
@@ -71,17 +80,16 @@ const selectTab = (tab, columns) => {
 };
 
 // Handler for drag/drop end, emits the last tab+columns.
-// Does not emit if:
+// Continues to emit even if:
 // A. The dragged tab is not dropped at the end of the list.
+//  - Eg: Use could be dragging the last tab to the middle.
 // B. The dragged tab is dropped back in its original position.
+//  - Eg: User could be dragging the existing last tab on itself
 const onDragEnd = (evt) => {
   const { oldIndex, newIndex } = evt;
-  if (newIndex != localTabs.value.length - 1 || newIndex === oldIndex) {
-    return;
-  }
-
   const lastTab = localTabs.value.at(-1);
-  console.log('Emitting lastTab', lastTab);
+  draggedTab.value = lastTab;
+  console.log('Emitting lastTab', lastTab, ' at index ', oldIndex, ' to index ', newIndex);
   emit('tabReordered', {tab: lastTab.tab, columns: lastTab.columns});
 };
 
@@ -163,13 +171,4 @@ const onDragEnd = (evt) => {
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
   border-bottom: 3px solid #A8D8D4;
 }
-
-
-.truncate-text {
-  white-space: nowrap;
-  overflow: hidden;
-  width: 2ch;
-  display: inline-block;
-}
-
 </style>

@@ -202,7 +202,7 @@ const toggleJsonViewer = () => {
   align-items: center;
   justify-content: center;
   min-height: 60vh;
-  min-width: 60vh;
+  min-width: 60vw;
   gap: 1rem;
 }
 
