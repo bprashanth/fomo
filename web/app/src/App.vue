@@ -112,9 +112,9 @@ const handleChildTabSelected = ({tab, columns}) => {
 }
 
 // Handles the schema editor components emitted data.
-const handleParentFieldsWithJoins = (parentFieldsWithJoins) => {
-  console.log("Parent fields with joins", parentFieldsWithJoins);
-  parentFieldsWithJoins.value = parentFieldsWithJoins;
+const handleParentFieldsWithJoins = (fields) => {
+  console.log("App: Parent fields with joins", fields);
+  parentFieldsWithJoins.value = fields;
 }
 
 const toggleJsonViewer = () => {

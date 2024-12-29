@@ -102,6 +102,7 @@ watchEffect(() => {
     name: field,
     joins: [],
   }));
+  console.log('SchemaEditor: parentFieldsWithJoins', parentFieldsWithJoins.value);
 });
 
 // Get fields that end with 'id'
