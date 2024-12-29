@@ -34,10 +34,9 @@
         class="tab"
         @click="selectTab(tab, columns)"
         >
-        {{ tab }}
-          <!-- <span :class="{ 'truncate-text': idx === localTabs.length - 1}">
-            {{ tab }}
-          </span> -->
+        <span :class="{ 'truncate-text': idx === localTabs.length - 1}">
+          {{ tab }}
+        </span>
         </li>
       </template>
     </draggable>
@@ -109,7 +108,7 @@ const onDragEnd = (evt) => {
   list-style: none;
   padding: 0;
   display: flex;
-  justify-content: space-around;
+  justify-content: center;
   font-family: monospace;
   margin-bottom: 0;
   margin-left: 0;

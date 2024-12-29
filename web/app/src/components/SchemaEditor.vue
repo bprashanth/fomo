@@ -180,9 +180,8 @@ const handleDrop = (parentFieldName) => {
   width: 100%;
   max-width: 800px;
   backdrop-filter: blur(40px);
-  border-radius: 0 0 10px 10px;
+  border-radius: 10px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-
 }
 
 .fields-container {
