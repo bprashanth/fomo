@@ -95,11 +95,14 @@ const parentFieldsWithJoins = ref([]);
 // watchEffect clears the joins array whenever the parent tab is switched,
 // meaning users will have to re-do their joins on switching back.
 watchEffect(() => {
-  console.log('Separator prop:', props.separator);
+  if (!props.parentFields) {
+    return;
+  }
   parentFieldsWithJoins.value = props.parentFields.map((field) => ({
     name: field,
     joins: [],
   }));
+  console.log('SchemaEditor: parentFieldsWithJoins', parentFieldsWithJoins.value);
 });
 
 // Get fields that end with 'id'
@@ -109,6 +112,9 @@ watchEffect(() => {
 // @TODO: This is a temporary solution. We need to find a better way to
 //  identify the fields that are IDs.
 const getIdFields = (fields) => {
+  if (!fields) {
+    return [];
+  }
   return fields.filter(field => field.toLowerCase().endsWith('id'));
 }
 
@@ -176,11 +182,12 @@ const handleDrop = (parentFieldName) => {
  */
 .schema-editor {
   display: flex;
-  justify-content: center;
-  align-items: center;
   padding: 0px 20px 0 20px;
   width: 100%;
   max-width: 800px;
+  backdrop-filter: blur(40px);
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .fields-container {

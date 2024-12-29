@@ -2,7 +2,7 @@
   <div class="json-viewport">
     <json-viewer
     v-if="props.fullData && props.parentTab"
-    :value="props.fullData[props.parentTab][0]"
+    :value="joinedData[0]"
     theme="dark"
     sort
     />
@@ -12,7 +12,7 @@
 <script setup>
 import { JsonViewer } from 'vue3-json-viewer';
 import 'vue3-json-viewer/dist/index.css';
-import { defineProps, watchEffect } from 'vue';
+import { defineProps, computed, watchEffect } from 'vue';
 
 const props = defineProps({
   fullData: Object,
@@ -21,7 +21,52 @@ const props = defineProps({
 });
 
 watchEffect(() => {
-  console.log('Parent fields with joins:', props.parentFieldsWithJoins);
+  console.log('JsonViewer: parentFieldsWithJoins', props.parentFieldsWithJoins);
+  console.log('JsonViewer: fullData', props.fullData);
+  console.log('JsonViewer: parentTab', props.parentTab);
+});
+
+const joinedData = computed(() => {
+  if(!props.fullData || !props.parentTab || !props.parentFieldsWithJoins) {
+    console.log('No fullData, parentTab, or parentFieldsWithJoins');
+    return [];
+  }
+  console.log('Running join on', props.parentFieldsWithJoins);
+  // Create a deep copy of the parent data.
+  // TODO: can we use structuredClone here since fullData is a JSON object?
+  const result = JSON.parse(JSON.stringify(props.fullData[props.parentTab]));
+
+  result.forEach(parentRecord => {
+    props.parentFieldsWithJoins.forEach(({name: parentField, joins}) => {
+      joins.forEach(joinSpec => {
+        const [childTab, childField] = joinSpec.split('.');
+        const childData = props.fullData[childTab];
+        console.log('childTab', childTab, 'childField', childField, 'childData', childData);
+
+        if (!childData) return;
+
+        // Find all matching child records
+        const matches = childData.filter(childRecord =>
+          childRecord[childField] === parentRecord[parentField]
+        );
+
+        console.log('matches', matches, 'for', parentField, 'in', childTab, 'with', childField);
+
+        // Create the new field name for the joined data.
+        const joinedFieldName = `${childTab}.${childField}`;
+
+        if (matches.length === 0) {
+          parentRecord[joinedFieldName] = null;
+        } else if (matches.length === 1) {
+          parentRecord[joinedFieldName] = matches[0];
+        } else {
+          parentRecord[joinedFieldName] = matches;
+        }
+      });
+    });
+  });
+
+  return result;
 });
 
 </script>
