@@ -25,6 +25,11 @@
     - Computes the join using the parentFieldsWithJoins and fullData
     - Displays the joined data
     - Emits the joined data to the parent
+
+  * MapsComponent.vue:
+    - Displays the map
+    - Detects lat/lon columns from the joined
+    - Displays lat/lon as markers on the map
 -->
 <template>
   <div id="app">
@@ -39,8 +44,15 @@
         @tabReordered="handleParentTabSelected"
       />
       <div class="schema-section" v-if="tabs">
+        <!-- A note on the v-show/v-if split:
+          - v-show is used on SchemaEditor because v-if will unmount/remount
+            the component on button toggle. This will reset the joined tabs UI.
+          - v-if is used on MapsComponent because v-show will keep sending
+            joinedData as an update every time it's modified by the json viewer.
+            This causes very slow map renders.
+        -->
         <SchemaEditor
-          v-if="currentEditor === 'schema'"
+          v-show="currentEditor === 'schema'"
           :parentFields="parentFields"
           :childFields="childFields"
           :childTabSelected="childTabSelected"
@@ -48,7 +60,7 @@
           @parentFieldsWithJoins="handleParentFieldsWithJoins"
         />
         <MapsComponent
-          v-else
+          v-if="currentEditor === 'maps'"
           :joinedData="joinedData"
         />
         <div class="editor-switcher">
