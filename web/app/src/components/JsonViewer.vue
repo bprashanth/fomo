@@ -1,3 +1,20 @@
+<!-- JsonViewer.vue
+  - Displays the joined data
+
+  @props:
+    - fullData: Object - The full data from the excel file
+    - parentTab: String - The name of the parent tab
+    - parentFieldsWithJoins: Array - parent fields + joined child fields (i.e
+       fields that have been dropped on them). The joined child fields can currently only contain "id" fields.
+
+  @emits:
+    - joinedData: Array - The joined data (parent + child fields).
+
+  @TODO:
+  - Display stats on data in json viewer panel.
+  - Show the most recently joined sub-object.
+  - Show a basic queryer.
+-->
 <template>
   <div class="json-viewport">
     <json-viewer
@@ -12,7 +29,7 @@
 <script setup>
 import { JsonViewer } from 'vue3-json-viewer';
 import 'vue3-json-viewer/dist/index.css';
-import { defineProps, computed, watchEffect } from 'vue';
+import { defineProps, computed, defineEmits } from 'vue';
 
 const props = defineProps({
   fullData: Object,
@@ -20,15 +37,10 @@ const props = defineProps({
   parentFieldsWithJoins: Array,
 });
 
-watchEffect(() => {
-  console.log('JsonViewer: parentFieldsWithJoins', props.parentFieldsWithJoins);
-  console.log('JsonViewer: fullData', props.fullData);
-  console.log('JsonViewer: parentTab', props.parentTab);
-});
+const emit = defineEmits(['joinedData']);
 
 const joinedData = computed(() => {
   if(!props.fullData || !props.parentTab || !props.parentFieldsWithJoins) {
-    console.log('No fullData, parentTab, or parentFieldsWithJoins');
     return [];
   }
   console.log('Running join on', props.parentFieldsWithJoins);
@@ -41,7 +53,6 @@ const joinedData = computed(() => {
       joins.forEach(joinSpec => {
         const [childTab, childField] = joinSpec.split('.');
         const childData = props.fullData[childTab];
-        console.log('childTab', childTab, 'childField', childField, 'childData', childData);
 
         if (!childData) return;
 
@@ -65,7 +76,7 @@ const joinedData = computed(() => {
       });
     });
   });
-
+  emit('joinedData', result);
   return result;
 });
 

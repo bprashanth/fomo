@@ -4,7 +4,8 @@
   :tabs -> TabComponent.vue -> @tabSelected -> :childFields
   :tabs -> TabComponent.vue -> @tabReordered -> :parentFields
   :parentFields, :childFields -> SchemaEditor.vue -> @joinFields
-  :fullData, :parentFieldsWithJoins -> JsonViewer.vue
+  :fullData, :parentFieldsWithJoins -> JsonViewer.vue -> @joinedData
+  :joinedData -> MapsComponent.vue
 
   * FileUpload.vue:
     - User uploads an excel file
@@ -19,6 +20,11 @@
   * SchemaEditor.vue:
     - Displays the parent+child columns
     - Processes the join logic
+
+  * JsonViewer.vue:
+    - Computes the join using the parentFieldsWithJoins and fullData
+    - Displays the joined data
+    - Emits the joined data to the parent
 -->
 <template>
   <div id="app">
@@ -34,12 +40,35 @@
       />
       <div class="schema-section" v-if="tabs">
         <SchemaEditor
+          v-if="currentEditor === 'schema'"
           :parentFields="parentFields"
           :childFields="childFields"
           :childTabSelected="childTabSelected"
           :separator="separator"
           @parentFieldsWithJoins="handleParentFieldsWithJoins"
         />
+        <MapsComponent
+          v-else
+          :joinedData="joinedData"
+        />
+        <div class="editor-switcher">
+          <button
+            :disabled="currentEditor === 'schema'"
+            @click="currentEditor = 'schema'"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button
+            :disabled="currentEditor === 'maps'"
+            @click="currentEditor = 'maps'"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -51,6 +80,7 @@
         :fullData="fullData"
         :parentTab="parentTabSelected"
         :parentFieldsWithJoins="parentFieldsWithJoins"
+        @joinedData="handleJoinedData"
       />
     </div>
 
@@ -70,6 +100,7 @@ import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
 import JsonViewer from './components/JsonViewer.vue';
+import MapsComponent from './components/MapsComponent.vue';
 const tabs = ref(null);
 const parentFields = ref([]);
 const childFields = ref([]);
@@ -77,13 +108,18 @@ const childTabSelected = ref(null);
 const parentTabSelected = ref(null);
 const fullData = ref({});
 const parentFieldsWithJoins = ref([]);
+const joinedData = ref({});
 
 // Separator used to join the child tab name with the child field name.
 // TODO: What do we do if the child tab name contains a '.'? maybe this should
 // be a prop.
 const separator = ref('.');
 
+// Flag to determine if the side panel json viewer is open.
 const isJsonViewerOpen = ref(false);
+
+// The current editor mode - an enum of maps or schema.
+const currentEditor = ref('schema');
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -117,6 +153,13 @@ const handleParentFieldsWithJoins = (fields) => {
   parentFieldsWithJoins.value = fields;
 }
 
+// Handles the json viewer components emitted data.
+const handleJoinedData = (data) => {
+  console.log("App: Joined data", data);
+  joinedData.value = data;
+};
+
+// Toggles the json viewer open/closed.
 const toggleJsonViewer = () => {
   isJsonViewerOpen.value = !isJsonViewerOpen.value;
 };
@@ -204,11 +247,36 @@ const toggleJsonViewer = () => {
   min-height: 60vh;
   min-width: 60vw;
   gap: 1rem;
+
+  backdrop-filter: blur(40px);
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .schema-section :deep(> *) {
   flex: 1;
   min-height: 0;
+}
+
+.editor-switcher {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.editor-switcher button {
+  border: none;
+  color: rgb(21, 21, 21, 0.5);
+  cursor: pointer;
+  position: relative;
+  background-color: transparent;
+}
+
+.editor-switcher button:hover:not(:disabled) {
+  color: #1E628C;
 }
 
 .json-viewer-wrapper {
