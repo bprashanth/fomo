@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "core-js": "^3.8.3",
-    "leaflet": "^1.9.4",
+    "leaflet": "^1.7.1",
+    "leaflet-draw": "^0.4.14",
     "vue": "^3.2.13",
     "vue3-json-viewer": "^2.2.2",
     "vuedraggable": "^4.1.0",

@@ -285,10 +285,11 @@ const toggleJsonViewer = () => {
   cursor: pointer;
   position: relative;
   background-color: transparent;
+  color: #1E628C;
 }
 
 .editor-switcher button:hover:not(:disabled) {
-  color: #1E628C;
+  color: #3388ff;
 }
 
 .json-viewer-wrapper {

@@ -16,9 +16,11 @@
 
 <script setup>
 
-import { onMounted, watch, defineProps, ref } from 'vue';
+import { onMounted, watch, defineProps, ref, shallowRef } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw';
+import 'leaflet-draw/dist/leaflet.draw.css';
 
 const props = defineProps({
   joinedData: {
@@ -27,9 +29,26 @@ const props = defineProps({
   },
 });
 
-const map = ref(null);
-const markers = ref([]);
+// It is important that the leaflet elements are shallowRef. Vue's reactivity
+// system does not work with leaflet's update/rendering system. For example,
+// vue can handle pushing new markers or replacing the entire map, but leaflet
+// must handle metadata updates to the layers themselves.
+
+// Base map and markers, initialized in onMounted, populated by the watcher.
+const map = shallowRef(null);
+const markers = shallowRef([]);
+
+// drawnItems is the container (FeatureGroup) for all drawn shapes.
+// Every shape or circlemarker edited onto the map by the user is added as a
+// new layer on the map through it.
+const drawnItems = shallowRef(null);
+
+// Pending data is stored by the watch handler when it's received before the
+// map is initialized, and processed from onMounted.
 const pendingData = ref(null);
+
+const geoJsonLayers = ref([]);
+
 
 /* Flatten a nested json object to a single level.
 
@@ -215,7 +234,62 @@ const initializeMap = () => {
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     {maxZoom: 19}
   ).addTo(map.value);
+
+  map.value.whenReady(() => {
+    initializeDrawTools();
+  });
 }
+
+const initializeDrawTools = () => {
+  if (!drawnItems.value) {
+    drawnItems.value = new L.featureGroup();
+  }
+  if (!map.value) {
+    console.error('Map not initialized');
+    return;
+  }
+
+  drawnItems.value.addTo(map.value);
+
+  const drawControl = new L.Control.Draw({
+    position: 'topright',
+    edit: {
+      featureGroup: drawnItems.value,
+      remove: true,
+    },
+    draw: {
+      polygon: false,
+      polyline: false,
+      circle: false,
+      marker: false,
+      rectangle: {
+        shapeOptions: {
+          color: '#3388ff',
+          weight: 2
+        },
+      },
+    },
+  });
+  map.value.addControl(drawControl);
+
+  // The draw:created event is triggered when a drawing is completed, i.e
+  // the user clicks the mouse button to complete a polygon. This works
+  // differently for different shapes.
+  // Each shape is a different layer, which we convert to GeoJSON and store
+  // in geoJsonLayers.
+  map.value.on('draw:created', (e) => {
+    console.log('draw:created', e);
+    const layer = e.layer;
+    drawnItems.value.addLayer(layer);
+    console.log('drawnItems added as layer ');
+
+    // Convert to GeoJSON and store in memory.
+    const geoJsonData = layer.toGeoJSON();
+    geoJsonLayers.value.push(geoJsonData);
+    console.log('Saved GeoJSON: ', geoJsonData);
+    console.log("Number of layers on map:", Object.keys(map.value._layers).length);
+  });
+};
 
 // Handle pending data in onMounted
 onMounted(() => {
