@@ -117,7 +117,7 @@ function createMarkers(points) {
     const marker = L.circleMarker([lat, lon], {
       radius: 2,
       fillColor: "#3388ff",
-      color: "#3388ff",
+      color: "#49AED6",
       weight: 1,
       opacity: 1,
       fillOpacity: 0.7,
@@ -151,8 +151,8 @@ function updateMapView(points) {
   map.value.flyToBounds(bounds, {
     padding: [50, 50],
     maxZoom: 13,
-    duration: 2,
-    easeLinearity: 0.5,
+    duration: 1,
+    easeLinearity: 0.3,
   });
 }
 
