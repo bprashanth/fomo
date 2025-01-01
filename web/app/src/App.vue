@@ -5,7 +5,7 @@
   :tabs -> TabComponent.vue -> @tabReordered -> :parentFields
   :parentFields, :childFields -> SchemaEditor.vue -> @joinFields
   :fullData, :parentFieldsWithJoins -> JsonViewer.vue -> @joinedData
-  :joinedData -> MapsComponent.vue
+  :joinedData, :geoJsonData -> MapsComponent.vue -> @geoJsonData
 
   * FileUpload.vue:
     - User uploads an excel file
@@ -62,6 +62,9 @@
         <MapsComponent
           v-if="currentEditor === 'maps'"
           :joinedData="joinedData"
+          :isWriter="true"
+          :geoJsonData="savedGeoJsonData"
+          @geoJsonData="handleGeoJsonData"
         />
         <div class="editor-switcher">
           <button
@@ -121,6 +124,7 @@ const parentTabSelected = ref(null);
 const fullData = ref({});
 const parentFieldsWithJoins = ref([]);
 const joinedData = ref({});
+const savedGeoJsonData = ref([]);
 
 // Separator used to join the child tab name with the child field name.
 // TODO: What do we do if the child tab name contains a '.'? maybe this should
@@ -175,6 +179,17 @@ const handleJoinedData = (data) => {
 const toggleJsonViewer = () => {
   isJsonViewerOpen.value = !isJsonViewerOpen.value;
 };
+
+/* Handles the geoJsonData emitted from the maps component.
+ *
+ * This function is only invoked by "writer" map components.
+ * This data is used to re-render the map in "readers".
+ *
+ * @param {Array} geoJsonData: The geoJson data from the maps component.
+ */
+const handleGeoJsonData = (geoJsonData) => {
+  savedGeoJsonData.value = geoJsonData;
+}
 </script>
 
 <style scoped>
@@ -285,10 +300,11 @@ const toggleJsonViewer = () => {
   cursor: pointer;
   position: relative;
   background-color: transparent;
+  color: #1E628C;
 }
 
 .editor-switcher button:hover:not(:disabled) {
-  color: #1E628C;
+  color: #3388ff;
 }
 
 .json-viewer-wrapper {

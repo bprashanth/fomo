@@ -6,7 +6,13 @@
   @props:
     - joinedData: Array - The joined data to display on the map
 
-  @emits: None
+  @emits:
+    - geoJsonData: Array - The geoJson data to display on the map. Pass this back from the parent to maintain state across mounts of this component.
+
+  @TODO:
+    - Debounce the geoJsonData emit to prevent double updates.
+    - watch the geoJsonData prop and update the map accordingly.
+    - Add a "clear" button to clear the map of previous geoJson renders.
 -->
 <template>
   <div class="map-container">
@@ -16,19 +22,49 @@
 
 <script setup>
 
-import { onMounted, watch, defineProps, ref } from 'vue';
+import { onMounted, watch, defineProps, ref, shallowRef, defineEmits } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw';
+import 'leaflet-draw/dist/leaflet.draw.css';
+// This import is needed to enable dragging of restored geoJson shapes.
+// It is what enables PathDrag to work.
+import 'leaflet-path-drag';
 
 const props = defineProps({
   joinedData: {
     type: Array,
     required: true
   },
+  geoJsonData: {
+    type: Array,
+    required: true
+  },
+  isWriter: {
+    type: Boolean,
+    default: true
+  }
 });
 
-const map = ref(null);
-const markers = ref([]);
+// Event used to emit the geoJsonData to the parent.
+const emit = defineEmits(['geoJsonData']);
+
+// It is important that the leaflet elements are shallowRef. Vue's reactivity
+// system does not work with leaflet's update/rendering system. For example,
+// vue can handle pushing new markers or replacing the entire map, but leaflet
+// must handle metadata updates to the layers themselves.
+
+// Base map and markers, initialized in onMounted, populated by the watcher.
+const map = shallowRef(null);
+const markers = shallowRef([]);
+
+// drawnItems is the container (FeatureGroup) for all drawn shapes.
+// Every shape or circlemarker edited onto the map by the user is added as a
+// new layer on the map through it.
+const drawnItems = shallowRef(null);
+
+// Pending data is stored by the watch handler when it's received before the
+// map is initialized, and processed from onMounted.
 const pendingData = ref(null);
 
 /* Flatten a nested json object to a single level.
@@ -117,7 +153,7 @@ function createMarkers(points) {
     const marker = L.circleMarker([lat, lon], {
       radius: 2,
       fillColor: "#3388ff",
-      color: "#3388ff",
+      color: "#49AED6",
       weight: 1,
       opacity: 1,
       fillOpacity: 0.7,
@@ -135,13 +171,13 @@ function clearExistingMarkers() {
   markers.value = [];
 }
 
-/* Update the map view to fit the points.
+/* Center the map view to fit the points.
  *
  * - Figure out the bounds of the points and zoom the map to fit them.
  *
  * @param {Array} points - The points to fit on the map.
  */
-function updateMapView(points) {
+function centerMapView(points) {
   if (points.length === 0) {
     console.warn('No valid points found to display on the map.');
     return;
@@ -151,8 +187,8 @@ function updateMapView(points) {
   map.value.flyToBounds(bounds, {
     padding: [50, 50],
     maxZoom: 13,
-    duration: 2,
-    easeLinearity: 0.5,
+    duration: 1,
+    easeLinearity: 0.3,
   });
 }
 
@@ -185,12 +221,12 @@ watch(
       // Process the data into points
       const points = processMapPoints(newData);
 
-      // Create and add new markers
+      // Add the points to the map
       const markersLayer = createMarkers(points);
       markersLayer.addTo(map.value);
 
-      // Update the map view
-      updateMapView(points);
+      // Re-center the map on the points
+      centerMapView(points);
     } catch (error) {
       console.error('Error updating map:', error);
     }
@@ -201,7 +237,8 @@ watch(
 /* Initialize the map.
  *
  * - Create the map element.
- * - Add a tile layer.
+ * - Initialize the draw controls (for "writers" only).
+ * - Add a feature group container layer.
  * - Set the view to the center of the world.
  */
 const initializeMap = () => {
@@ -211,11 +248,164 @@ const initializeMap = () => {
       attributionControl: false,
       // zoomControl: false,
     }).setView([0, 0], 2);
+
   L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     {maxZoom: 19}
   ).addTo(map.value);
+
+  // Add the feature group container to the map.
+  // The feature group will contains layers.
+  // Each drawing is a layer.
+  // So the drawnItems will be populated with:
+  // - writers: the drawn shapes (ignores the geoJsonData prop)
+  // - readers: the restored shapes from the geoJsonData prop (no drawn shapes)
+  drawnItems.value = new L.featureGroup();
+  drawnItems.value.addTo(map.value);
+
+  if (props.isWriter) {
+    initializeWriterTools();
+  }
 }
+
+/* Initialize all the utils needed to draw on the map.
+ *
+ * This function is only meant for "writers" of the map.
+ *
+ * - Draw controls themselves.
+ * - Container (feature group) for the drawn layers.
+ * - Listener for the draw:created event.
+ * - A save button that emits the drawn layers as geoJson to the parent.
+ */
+const initializeWriterTools = () => {
+  const drawControl = new L.Control.Draw({
+    position: 'topright',
+    edit: {
+      featureGroup: drawnItems.value,
+      remove: true,
+    },
+    draw: {
+      polygon: false,
+      polyline: false,
+      circle: false,
+      marker: false,
+      rectangle: {
+        shapeOptions: {
+          color: '#3388ff',
+          weight: 2
+        },
+      },
+    },
+  });
+  map.value.addControl(drawControl);
+
+  const saveControl = L.Control.extend({
+    options: {
+      position: 'topright',
+    },
+    onAdd: function() {
+      const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+      const button = L.DomUtil.create('a', '', container);
+      button.innerHTML = '💾';
+      button.title = 'Save Changes';
+      button.style.fontSize = '20px';
+      button.style.textAlign = 'center';
+      button.style.cursor = 'pointer';
+
+      // When the save button is clicked, serialize the drawn layers to geoJson
+      // and emit them to the parent.
+      L.DomEvent.on(button, 'click', function() {
+        const layers = [];
+        drawnItems.value.eachLayer((layer) => {
+          layers.push(toGeoJson(layer));
+        });
+        emit('geoJsonData', layers);
+      });
+
+      return container;
+    }
+  });
+  map.value.addControl(new saveControl());
+
+  // The draw:created event is triggered when a drawing is completed, i.e
+  // the user clicks the mouse button to complete a polygon.
+  // Each shape is a different layer, which we cache in the drawnItems feature
+  // group. We also emit the geoJson data to the parent for storing/broadcasting
+  // to other "readers" of the map on "save".
+  map.value.on('draw:created', (e) => {
+    const layer = e.layer;
+    // Writers emit drawnItems when the save button is clicked.
+    drawnItems.value.addLayer(layer);
+  });
+};
+
+/* Convert a leaflet layer to geoJson.
+ *
+ * - Add style properties to the geoJson object for circle markers.
+ *
+ * @param {L.Layer} layer - The leaflet layer to convert to geoJson.
+ * @returns {Object} The geoJson object.
+ */
+const toGeoJson = (layer) => {
+    const geoJson = layer.toGeoJSON();
+
+    // Most shapes, rectangles etc, are converted to geoJson as Polygon
+    // objects. These have embedded style properties.
+    // CircleMarkers are converted to geoJson as Point objects. These don't
+    // have style properties, so add them here.
+    if (layer instanceof L.CircleMarker) {
+      geoJson.properties.style = {
+        radius: layer.options.radius,
+        color: layer.options.color,
+        weight: layer.options.weight,
+        opacity: layer.options.opacity,
+        fillOpacity: layer.options.fillOpacity,
+        fillColor: layer.options.fillColor,
+      };
+    }
+    return geoJson;
+}
+
+/* Update the map layers with the geoJson data.
+ *
+ * This function assumes that all drawn layers are stored in the passed in
+ * geoJsonArray, and that this layer DOES NOT contain any base points data -
+ * i.e the data is only the drawn shapes, not from the joined datasets.
+ *
+ * - Clear the existing drawn layers (not including the joined "points" data).
+ * - Add the new drawn layers.
+ *
+ * A note on geoJson <-> leaflet serialization:
+ * - This process is not perfect. The geoJson data is not always serialized
+ *   exactly as the user drew it. For example, the geoJson data does not
+ *   contain the style properties, or the exact draw controls.
+ *
+ * @param {Array} geoJsonArray - The geoJson data to add to the map.
+ */
+const restoreMapLayers = (geoJsonArray) => {
+  // Clear all layers in the feature group before trying to restore them.
+  drawnItems.value.clearLayers();
+  geoJsonArray.forEach((geoJson) => {
+    const layer = L.geoJSON(geoJson, {
+      pointToLayer: (feature, latlng) => {
+        if (feature.properties.style) {
+          return L.circleMarker(latlng, feature.properties.style);
+        }
+        return L.circleMarker(latlng);
+      },
+      style: (feature) => feature.properties.style
+    });
+
+    layer.eachLayer((subLayer) => {
+      // Only enable dragging if the layer supports it
+      if (typeof L.Handler.PathDrag !== 'undefined') {
+        subLayer.options.draggable = true;
+        new L.Handler.PathDrag(subLayer).enable();
+      }
+      drawnItems.value.addLayer(subLayer);
+    });
+  });
+};
 
 // Handle pending data in onMounted
 onMounted(() => {
@@ -227,11 +417,15 @@ onMounted(() => {
     const newData = pendingData.value;
     pendingData.value = null;
 
+    // TODO: This is a duplicate of the code in the watch handler.
     const points = processMapPoints(newData);
     const markersLayer = createMarkers(points);
     markersLayer.addTo(map.value);
-    updateMapView(points);
+    centerMapView(points);
   }
+
+  // Re-render geoJsonData (shapes drawn on a previous render of the map)
+  restoreMapLayers(props.geoJsonData);
 });
 
 </script>
