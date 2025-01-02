@@ -242,7 +242,7 @@ const handleGeoJsonData = (geoJsonData) => {
       rgba(148, 186, 182, 0.8) 70%,
       #94BAB6 100%
     ),
-    url('./assets/background.png') no-repeat center center;
+    url('./assets/background.webp') no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   filter: blur(5px);
