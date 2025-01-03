@@ -2,19 +2,30 @@
 
   - Figure out the lat/lon columns from the joined data
   - Display the joined data as markers on the map
+  - Allow the user to edit layers, emit these to the parent on "save"
+  - Re-render previously saved geoJson data
 
   @props:
     - joinedData: Array - The joined data to display on the map
+    - geoJsonData: Array - The geoJson data to display on the map. Pass this back from the parent to maintain state across mounts of this component.
 
   @emits:
     - geoJsonData: Array - The geoJson data to display on the map. Pass this back from the parent to maintain state across mounts of this component.
-
-  @TODO:
-    - Debounce the geoJsonData emit to prevent double updates.
-    - watch the geoJsonData prop and update the map accordingly.
-    - Add a "clear" button to clear the map of previous geoJson renders.
 -->
 <template>
+
+  <!-- Progress bar overlay
+    - This is the progress bar that displays map save progress.
+    - It is increased in length as captureProgress is increased in js.
+    -->
+  <div v-if="isCapturing" class="progress-overlay">
+    <div class="progress-bar-container">
+      <div class="progress-bar">
+        <div class="progress-fill" :style="{ width: captureProgress + '%'}"/>
+      </div>
+    </div>
+  </div>
+
   <div class="map-container">
     <div id="map" class="map fade-in"></div>
   </div>
@@ -39,10 +50,6 @@ const props = defineProps({
   geoJsonData: {
     type: Array,
     required: true
-  },
-  isWriter: {
-    type: Boolean,
-    default: true
   }
 });
 
@@ -66,6 +73,9 @@ const drawnItems = shallowRef(null);
 // Pending data is stored by the watch handler when it's received before the
 // map is initialized, and processed from onMounted.
 const pendingData = ref(null);
+
+const isCapturing = ref(false);
+const captureProgress = ref(0);
 
 /* Flatten a nested json object to a single level.
 
@@ -251,7 +261,10 @@ const initializeMap = () => {
 
   L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    {maxZoom: 19}
+    {
+      maxZoom: 19,
+      crossOrigin: true,
+    }
   ).addTo(map.value);
 
   // Add the feature group container to the map.
@@ -262,10 +275,7 @@ const initializeMap = () => {
   // - readers: the restored shapes from the geoJsonData prop (no drawn shapes)
   drawnItems.value = new L.featureGroup();
   drawnItems.value.addTo(map.value);
-
-  if (props.isWriter) {
-    initializeWriterTools();
-  }
+  initializeWriterTools();
 }
 
 /* Initialize all the utils needed to draw on the map.
@@ -314,13 +324,7 @@ const initializeWriterTools = () => {
 
       // When the save button is clicked, serialize the drawn layers to geoJson
       // and emit them to the parent.
-      L.DomEvent.on(button, 'click', function() {
-        const layers = [];
-        drawnItems.value.eachLayer((layer) => {
-          layers.push(toGeoJson(layer));
-        });
-        emit('geoJsonData', layers);
-      });
+      L.DomEvent.on(button, 'click', captureMap);
 
       return container;
     }
@@ -339,6 +343,65 @@ const initializeWriterTools = () => {
   });
 };
 
+/* Capture the map as an image and the drawn layers as geoJson.
+ *
+ * - Show a progress bar.
+ * - Capture the drawn layers as geoJson.
+ *
+ * This function uses promises/async to ensure the progress bar is updated.
+ * This is important because without feedback, the user will navigate away from * the component, cancelling the capture.
+ *
+ * @emits {Object} geoJsonData - The geoJson data and image.
+ */
+const captureMap = async () => {
+  try {
+    console.log('MapComponent: Starting capture process');
+
+    // Show the progress bar
+    isCapturing.value = true;
+    captureProgress.value = 10;
+
+    // Allow the DOM to update immediately
+    // How does this work?
+    // SetTimeout is a "javascript thing", and updating the UI is a "browser
+    // thing". The browser typically prioritizes script execution, but when
+    // it encounters a setTimeout, it stashes it on the "script stack" and uses
+    // the opportunity to clear the "rendering stack". This only works because
+    // the setTimeout function doesn't guarantee the time - only that at least
+    // that much time has passed.
+    // This behavior is part of the html spec - a mechanism to prevent
+    // starvation of the UI thread:
+    // https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Defer recording the layers
+    const layers = await new Promise((resolve) => setTimeout(() => {
+      const tempLayers = [];
+      drawnItems.value.eachLayer((layer) => {
+        tempLayers.push(toGeoJson(layer));
+        if (captureProgress.value < 90) {
+          captureProgress.value += 10;
+        }
+      });
+      resolve(tempLayers);
+    }, 100));
+    // Cleanup the progress bar
+    captureProgress.value = 100;
+    setTimeout(() => {
+      isCapturing.value = false;
+      captureProgress.value = 0;
+    }, 300);
+
+    // Emit the GeoJSON data to the parent
+    emit('geoJsonData', layers);
+  } catch (error) {
+    console.error('Error saving map:', error);
+
+    // Cleanup on error
+    isCapturing.value = false;
+    captureProgress.value = 0;
+  }
+};
 /* Convert a leaflet layer to geoJson.
  *
  * - Add style properties to the geoJson object for circle markers.
@@ -431,6 +494,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
+
+/* Map styling
+ * - most of the map styling is handled by leaflet.
+ * - the fade-in animation is not strictly necessary, just a nice touch
+ *
+ * Progress bar styling
+ * This occurs in 4 classes:
+ * - overlay: blurs the map to indicate a non-interactive state
+ * - container: positions the bar at the bottom right corner of the map
+ * - bar: circular borders and sizing for the bar itself
+ * - fill: filling for the bar itself
+ */
 .map-container {
   height: 100%;
   width: 100%;
@@ -459,4 +534,41 @@ onMounted(() => {
     opacity: 1;
   }
 }
+
+.progress-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+/* Centered container for the progress bar */
+.progress-bar-container {
+  width: 20%;
+  position: absolute;
+  bottom: 10%;
+  right: 6%;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #F3B214;
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
 </style>
