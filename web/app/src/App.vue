@@ -5,7 +5,8 @@
   :tabs -> TabComponent.vue -> @tabReordered -> :parentFields
   :parentFields, :childFields -> SchemaEditor.vue -> @joinFields
   :fullData, :parentFieldsWithJoins -> JsonViewer.vue -> @joinedData
-  :joinedData, :geoJsonData -> MapsComponent.vue -> @geoJsonData
+  :joinedData, :geoJsonData -> WriterMapComponent.vue -> @geoJsonData
+  :geoJsonData -> ReaderMapComponent.vue
 
   * FileUpload.vue:
     - User uploads an excel file
@@ -26,7 +27,7 @@
     - Displays the joined data
     - Emits the joined data to the parent
 
-  * MapsComponent.vue:
+  * WriterMapComponent.vue:
     - Displays the map
     - Detects lat/lon columns from the joined
     - Displays lat/lon as markers on the map
@@ -34,7 +35,7 @@
 <template>
   <div id="app">
     <div class="background"></div>
-    <div class="content" :class="{ 'dragging': isJsonViewerOpen }">
+    <div class="content" :class="{ 'dragging': isDataViewerOpen }">
       <FileUpload @fileParsed="handleFileParsed" />
       <TabComponent
         v-if="tabs"
@@ -59,10 +60,9 @@
           :separator="separator"
           @parentFieldsWithJoins="handleParentFieldsWithJoins"
         />
-        <MapsComponent
+        <WriterMapComponent
           v-if="currentEditor === 'maps'"
           :joinedData="joinedData"
-          :isWriter="true"
           :geoJsonData="savedGeoJsonData"
           @geoJsonData="handleGeoJsonData"
         />
@@ -88,8 +88,9 @@
     </div>
 
     <div
-    class="json-viewer-wrapper"
-    :class="{ 'expanded': isJsonViewerOpen }"
+    class="data-viewer-wrapper"
+    :class="{ 'expanded': isDataViewerOpen }"
+    @transitionend="handleTransitionEnd"
     >
       <JsonViewer
         :fullData="fullData"
@@ -97,13 +98,17 @@
         :parentFieldsWithJoins="parentFieldsWithJoins"
         @joinedData="handleJoinedData"
       />
-      <img :src="savedMapImage" alt="Map Image" />
+      <ReaderMapComponent
+        v-if="isDataViewerOpen && isTransitionComplete && savedGeoJsonData.length"
+        :geoJsonData="savedGeoJsonData"
+        map-id="reader-map-1"
+      />
     </div>
 
     <div
     class="file-edge"
     @click="toggleJsonViewer"
-    :class="{ 'expanded': isJsonViewerOpen }"
+    :class="{ 'expanded': isDataViewerOpen }"
     >
       <span class="file-label">data</span>
     </div>
@@ -116,7 +121,8 @@ import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
 import JsonViewer from './components/JsonViewer.vue';
-import MapsComponent from './components/MapsComponent.vue';
+import WriterMapComponent from './components/WriterMapComponent.vue';
+import ReaderMapComponent from './components/ReaderMapComponent.vue';
 const tabs = ref(null);
 const parentFields = ref([]);
 const childFields = ref([]);
@@ -126,7 +132,9 @@ const fullData = ref({});
 const parentFieldsWithJoins = ref([]);
 const joinedData = ref({});
 const savedGeoJsonData = ref([]);
-const savedMapImage = ref(null);
+
+// Marks whether the data viewer panel has fully transitioned to open.
+const isTransitionComplete = ref(false);
 
 // Separator used to join the child tab name with the child field name.
 // TODO: What do we do if the child tab name contains a '.'? maybe this should
@@ -134,7 +142,7 @@ const savedMapImage = ref(null);
 const separator = ref('.');
 
 // Flag to determine if the side panel json viewer is open.
-const isJsonViewerOpen = ref(false);
+const isDataViewerOpen = ref(false);
 
 // The current editor mode - an enum of maps or schema.
 const currentEditor = ref('schema');
@@ -179,8 +187,19 @@ const handleJoinedData = (data) => {
 
 // Toggles the json viewer open/closed.
 const toggleJsonViewer = () => {
-  isJsonViewerOpen.value = !isJsonViewerOpen.value;
+  if (!isDataViewerOpen.value) {
+    isTransitionComplete.value = false;
+  }
+  isDataViewerOpen.value = !isDataViewerOpen.value;
 };
+
+// Records when the data viewer has fully transitioned to open. This is used
+// as a signal to trigger the map render.
+const handleTransitionEnd = (e) => {
+  if (e.propertyName === 'width' && isDataViewerOpen.value) {
+    isTransitionComplete.value = true;
+  }
+}
 
 /* Handles the geoJsonData emitted from the maps component.
  *
@@ -190,8 +209,7 @@ const toggleJsonViewer = () => {
  * @param {Array} geoJsonData: The geoJson data from the maps component.
  */
 const handleGeoJsonData = (geoJsonData) => {
-  savedGeoJsonData.value = geoJsonData.layers;
-  savedMapImage.value = geoJsonData.image;
+  savedGeoJsonData.value = geoJsonData;
 }
 </script>
 
@@ -310,7 +328,7 @@ const handleGeoJsonData = (geoJsonData) => {
   color: #3388ff;
 }
 
-.json-viewer-wrapper {
+.data-viewer-wrapper {
   width: 15px;
   background-color: #151515;
   height: 100%;
@@ -323,13 +341,14 @@ const handleGeoJsonData = (geoJsonData) => {
   overflow: hidden;
   transition: width 0.5s ease;
   z-index: 5;
+  justify-content: center;
 }
 
-.json-viewer-wrapper.expanded {
+.data-viewer-wrapper.expanded {
   width: 25%;
 }
 
-/* File Edge keeps up with the json-viewer-wrapper */
+/* File Edge keeps up with the data-viewer-wrapper */
 .file-edge.expanded {
   right: 25%;
 }

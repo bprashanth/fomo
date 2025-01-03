@@ -2,17 +2,15 @@
 
   - Figure out the lat/lon columns from the joined data
   - Display the joined data as markers on the map
+  - Allow the user to edit layers, emit these to the parent on "save"
+  - Re-render previously saved geoJson data
 
   @props:
     - joinedData: Array - The joined data to display on the map
+    - geoJsonData: Array - The geoJson data to display on the map. Pass this back from the parent to maintain state across mounts of this component.
 
   @emits:
     - geoJsonData: Array - The geoJson data to display on the map. Pass this back from the parent to maintain state across mounts of this component.
-
-  @TODO:
-    - Debounce the geoJsonData emit to prevent double updates.
-    - watch the geoJsonData prop and update the map accordingly.
-    - Add a "clear" button to clear the map of previous geoJson renders.
 -->
 <template>
 
@@ -43,7 +41,6 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 // This import is needed to enable dragging of restored geoJson shapes.
 // It is what enables PathDrag to work.
 import 'leaflet-path-drag';
-import html2canvas from 'html2canvas';
 
 const props = defineProps({
   joinedData: {
@@ -53,10 +50,6 @@ const props = defineProps({
   geoJsonData: {
     type: Array,
     required: true
-  },
-  isWriter: {
-    type: Boolean,
-    default: true
   }
 });
 
@@ -271,7 +264,6 @@ const initializeMap = () => {
     {
       maxZoom: 19,
       crossOrigin: true,
-
     }
   ).addTo(map.value);
 
@@ -283,10 +275,7 @@ const initializeMap = () => {
   // - readers: the restored shapes from the geoJsonData prop (no drawn shapes)
   drawnItems.value = new L.featureGroup();
   drawnItems.value.addTo(map.value);
-
-  if (props.isWriter) {
-    initializeWriterTools();
-  }
+  initializeWriterTools();
 }
 
 /* Initialize all the utils needed to draw on the map.
@@ -358,10 +347,9 @@ const initializeWriterTools = () => {
  *
  * - Show a progress bar.
  * - Capture the drawn layers as geoJson.
- * - Capture the map as an image.
  *
  * This function uses promises/async to ensure the progress bar is updated.
- * This is important because without feedback, the user will navigate away from * the component, cancelling the capture. The html2canvas operation takes close * to 5 seconds.
+ * This is important because without feedback, the user will navigate away from * the component, cancelling the capture.
  *
  * @emits {Object} geoJsonData - The geoJson data and image.
  */
@@ -391,17 +379,12 @@ const captureMap = async () => {
       const tempLayers = [];
       drawnItems.value.eachLayer((layer) => {
         tempLayers.push(toGeoJson(layer));
+        if (captureProgress.value < 90) {
+          captureProgress.value += 10;
+        }
       });
       resolve(tempLayers);
     }, 100));
-    captureProgress.value = 50;
-
-    // Capture the map image
-    const mapElement = map.value.getContainer();
-    const canvas = await html2canvas(mapElement, { scale: 0.5 });
-    const mapImage = canvas.toDataURL('image/png');
-    console.log('MapComponent: Finished capturing image');
-
     // Cleanup the progress bar
     captureProgress.value = 100;
     setTimeout(() => {
@@ -410,7 +393,7 @@ const captureMap = async () => {
     }, 300);
 
     // Emit the GeoJSON data to the parent
-    emit('geoJsonData', { layers: layers, image: mapImage });
+    emit('geoJsonData', layers);
   } catch (error) {
     console.error('Error saving map:', error);
 
