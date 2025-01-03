@@ -125,6 +125,7 @@ const fullData = ref({});
 const parentFieldsWithJoins = ref([]);
 const joinedData = ref({});
 const savedGeoJsonData = ref([]);
+const savedMapImage = ref(null);
 
 // Separator used to join the child tab name with the child field name.
 // TODO: What do we do if the child tab name contains a '.'? maybe this should
@@ -188,7 +189,8 @@ const toggleJsonViewer = () => {
  * @param {Array} geoJsonData: The geoJson data from the maps component.
  */
 const handleGeoJsonData = (geoJsonData) => {
-  savedGeoJsonData.value = geoJsonData;
+  savedGeoJsonData.value = geoJsonData.layers;
+  savedMapImage.value = geoJsonData.image;
 }
 </script>
 

@@ -15,6 +15,19 @@
     - Add a "clear" button to clear the map of previous geoJson renders.
 -->
 <template>
+
+  <!-- Progress bar overlay
+    - This is the progress bar that displays map save progress.
+    - It is increased in length as captureProgress is increased in js.
+    -->
+  <div v-if="isCapturing" class="progress-overlay">
+    <div class="progress-bar-container">
+      <div class="progress-bar">
+        <div class="progress-fill" :style="{ width: captureProgress + '%'}"/>
+      </div>
+    </div>
+  </div>
+
   <div class="map-container">
     <div id="map" class="map fade-in"></div>
   </div>
@@ -30,6 +43,7 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 // This import is needed to enable dragging of restored geoJson shapes.
 // It is what enables PathDrag to work.
 import 'leaflet-path-drag';
+import html2canvas from 'html2canvas';
 
 const props = defineProps({
   joinedData: {
@@ -66,6 +80,9 @@ const drawnItems = shallowRef(null);
 // Pending data is stored by the watch handler when it's received before the
 // map is initialized, and processed from onMounted.
 const pendingData = ref(null);
+
+const isCapturing = ref(false);
+const captureProgress = ref(0);
 
 /* Flatten a nested json object to a single level.
 
@@ -314,13 +331,7 @@ const initializeWriterTools = () => {
 
       // When the save button is clicked, serialize the drawn layers to geoJson
       // and emit them to the parent.
-      L.DomEvent.on(button, 'click', function() {
-        const layers = [];
-        drawnItems.value.eachLayer((layer) => {
-          layers.push(toGeoJson(layer));
-        });
-        emit('geoJsonData', layers);
-      });
+      L.DomEvent.on(button, 'click', captureMap);
 
       return container;
     }
@@ -339,6 +350,71 @@ const initializeWriterTools = () => {
   });
 };
 
+/* Capture the map as an image and the drawn layers as geoJson.
+ *
+ * - Show a progress bar.
+ * - Capture the drawn layers as geoJson.
+ * - Capture the map as an image.
+ *
+ * This function uses promises/async to ensure the progress bar is updated.
+ * This is important because without feedback, the user will navigate away from * the component, cancelling the capture. The html2canvas operation takes close * to 5 seconds.
+ *
+ * @emits {Object} geoJsonData - The geoJson data and image.
+ */
+const captureMap = async () => {
+  try {
+    console.log('MapComponent: Starting capture process');
+
+    // Show the progress bar
+    isCapturing.value = true;
+    captureProgress.value = 10;
+
+    // Allow the DOM to update immediately
+    // How does this work?
+    // SetTimeout is a "javascript thing", and updating the UI is a "browser
+    // thing". The browser typically prioritizes script execution, but when
+    // it encounters a setTimeout, it stashes it on the "script stack" and uses
+    // the opportunity to clear the "rendering stack". This only works because
+    // the setTimeout function doesn't guarantee the time - only that at least
+    // that much time has passed.
+    // This behavior is part of the html spec - a mechanism to prevent
+    // starvation of the UI thread:
+    // https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Defer recording the layers
+    const layers = await new Promise((resolve) => setTimeout(() => {
+      const tempLayers = [];
+      drawnItems.value.eachLayer((layer) => {
+        tempLayers.push(toGeoJson(layer));
+      });
+      resolve(tempLayers);
+    }, 100));
+    captureProgress.value = 50;
+
+    // Capture the map image
+    const mapElement = map.value.getContainer();
+    const canvas = await html2canvas(mapElement, { scale: 0.5 });
+    const mapImage = canvas.toDataURL('image/png');
+    console.log('MapComponent: Finished capturing image');
+
+    // Cleanup the progress bar
+    captureProgress.value = 100;
+    setTimeout(() => {
+      isCapturing.value = false;
+      captureProgress.value = 0;
+    }, 300);
+
+    // Emit the GeoJSON data to the parent
+    emit('geoJsonData', { layers: layers, image: mapImage });
+  } catch (error) {
+    console.error('Error saving map:', error);
+
+    // Cleanup on error
+    isCapturing.value = false;
+    captureProgress.value = 0;
+  }
+};
 /* Convert a leaflet layer to geoJson.
  *
  * - Add style properties to the geoJson object for circle markers.
@@ -431,6 +507,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
+
+/* Map styling
+ * - most of the map styling is handled by leaflet.
+ * - the fade-in animation is not strictly necessary, just a nice touch
+ *
+ * Progress bar styling
+ * This occurs in 4 classes:
+ * - overlay: blurs the map to indicate a non-interactive state
+ * - container: positions the bar at the bottom right corner of the map
+ * - bar: circular borders and sizing for the bar itself
+ * - fill: filling for the bar itself
+ */
 .map-container {
   height: 100%;
   width: 100%;
@@ -459,4 +547,41 @@ onMounted(() => {
     opacity: 1;
   }
 }
+
+.progress-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+/* Centered container for the progress bar */
+.progress-bar-container {
+  width: 20%;
+  position: absolute;
+  bottom: 10%;
+  right: 6%;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: rgba(255, 217, 0, 0.5);
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
 </style>
