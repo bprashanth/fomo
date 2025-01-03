@@ -97,6 +97,7 @@
         :parentFieldsWithJoins="parentFieldsWithJoins"
         @joinedData="handleJoinedData"
       />
+      <img :src="savedMapImage" alt="Map Image" />
     </div>
 
     <div

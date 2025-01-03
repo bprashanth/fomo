@@ -268,7 +268,11 @@ const initializeMap = () => {
 
   L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    {maxZoom: 19}
+    {
+      maxZoom: 19,
+      crossOrigin: true,
+
+    }
   ).addTo(map.value);
 
   // Add the feature group container to the map.
@@ -579,7 +583,7 @@ onMounted(() => {
 
 .progress-fill {
   height: 100%;
-  background-color: rgba(255, 217, 0, 0.5);
+  background-color: #F3B214;
   border-radius: 4px;
   transition: width 0.2s ease;
 }
