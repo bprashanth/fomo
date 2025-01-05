@@ -34,83 +34,110 @@
 -->
 <template>
   <div id="app">
-    <div class="background"></div>
-    <div class="content" :class="{ 'dragging': isDataViewerOpen }">
-      <FileUpload @fileParsed="handleFileParsed" />
-      <TabComponent
-        v-if="tabs"
-        :tabs="tabs"
-        title="Child Dataset"
-        @tabSelected="handleChildTabSelected"
-        @tabReordered="handleParentTabSelected"
-      />
-      <div class="schema-section" v-if="tabs">
-        <!-- A note on the v-show/v-if split:
-          - v-show is used on SchemaEditor because v-if will unmount/remount
-            the component on button toggle. This will reset the joined tabs UI.
-          - v-if is used on MapsComponent because v-show will keep sending
-            joinedData as an update every time it's modified by the json viewer.
-            This causes very slow map renders.
-        -->
-        <SchemaEditor
-          v-show="currentEditor === 'schema'"
-          :parentFields="parentFields"
-          :childFields="childFields"
-          :childTabSelected="childTabSelected"
-          :separator="separator"
-          @parentFieldsWithJoins="handleParentFieldsWithJoins"
+    <!-- HACK
+      - This is so hack but it will have to do for now.
+        There is some issue with css background url not fetching images from
+        assets/ in vue3.
+      - The ideal solution would be to use router-link and navigate to the
+        dashboard but that requires a global definition of props.
+    -->
+    <DashboardPage
+    v-if="currentView === 'DashboardPage'"
+    :schema="{}"
+    :geoJsonData="savedGeoJsonData"
+    :joinedData="joinedData"
+    @goBack="currentView = 'App'"
+    />
+    <div v-else>
+      <!-- HACK
+
+        - Move this into EditorComponent.vue and keep App.vue clean.
+      -->
+      <div class="background"></div>
+      <div class="content" :class="{ 'dragging': isDataViewerOpen }">
+        <FileUpload @fileParsed="handleFileParsed" />
+        <TabComponent
+          v-if="tabs"
+          :tabs="tabs"
+          title="Child Dataset"
+          @tabSelected="handleChildTabSelected"
+          @tabReordered="handleParentTabSelected"
         />
-        <WriterMapComponent
-          v-if="currentEditor === 'maps'"
-          :joinedData="joinedData"
-          :geoJsonData="savedGeoJsonData"
-          @geoJsonData="handleGeoJsonData"
-        />
-        <div class="editor-switcher">
-          <button
-            :disabled="currentEditor === 'schema'"
-            @click="currentEditor = 'schema'"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button
-            :disabled="currentEditor === 'maps'"
-            @click="currentEditor = 'maps'"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+        <div class="schema-section" v-if="tabs">
+          <!-- A note on the v-show/v-if split:
+            - v-show is used on SchemaEditor because v-if will unmount/remount
+              the component on button toggle. This will reset the joined tabs UI.
+            - v-if is used on MapsComponent because v-show will keep sending
+              joinedData as an update every time it's modified by the json viewer.
+              This causes very slow map renders.
+          -->
+          <SchemaEditor
+            v-show="currentEditor === 'schema'"
+            :parentFields="parentFields"
+            :childFields="childFields"
+            :childTabSelected="childTabSelected"
+            :separator="separator"
+            @parentFieldsWithJoins="handleParentFieldsWithJoins"
+          />
+          <WriterMapComponent
+            v-if="currentEditor === 'maps'"
+            :joinedData="joinedData"
+            :geoJsonData="savedGeoJsonData"
+            @geoJsonData="handleGeoJsonData"
+          />
+          <div class="editor-switcher">
+            <button
+              :disabled="currentEditor === 'schema'"
+              @click="currentEditor = 'schema'"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button
+              :disabled="currentEditor === 'maps'"
+              @click="currentEditor = 'maps'"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <div
-    class="data-viewer-wrapper"
-    :class="{ 'expanded': isDataViewerOpen }"
-    @transitionend="handleTransitionEnd"
-    >
-      <JsonViewer
-        :fullData="fullData"
-        :parentTab="parentTabSelected"
-        :parentFieldsWithJoins="parentFieldsWithJoins"
-        @joinedData="handleJoinedData"
-      />
-      <ReaderMapComponent
-        v-if="isDataViewerOpen && isTransitionComplete && savedGeoJsonData.length"
-        :geoJsonData="savedGeoJsonData"
-        map-id="reader-map-1"
-      />
-    </div>
-
-    <div
-    class="file-edge"
-    @click="toggleJsonViewer"
-    :class="{ 'expanded': isDataViewerOpen }"
-    >
-      <span class="file-label">data</span>
+      <div
+      class="data-viewer-wrapper"
+      :class="{ 'expanded': isDataViewerOpen }"
+      @transitionend="handleTransitionEnd"
+      >
+        <!-- A note on the JsonViewer:
+        Do not v-if the JsonViewer as it computes joins from data in the
+        drag/drop. v-show is fine, but feels less responsive.
+        -->
+        <JsonViewer
+          :fullData="fullData"
+          :parentTab="parentTabSelected"
+          :parentFieldsWithJoins="parentFieldsWithJoins"
+          @joinedData="handleJoinedData"
+        />
+        <ReaderMapComponent
+          v-if="isDataViewerOpen && isTransitionComplete && savedGeoJsonData.length"
+          :geoJsonData="savedGeoJsonData"
+          map-id="reader-map-1"
+        />
+        <div
+        class="dashboard-button"
+        v-if="currentView === 'App' && isDataViewerOpen">
+          <button @click="goToDashboard">Fomosphere</button>
+        </div>
+      </div>
+      <div
+      class="file-edge"
+      @click="toggleJsonViewer"
+      :class="{ 'expanded': isDataViewerOpen }"
+      >
+        <span class="file-label">data</span>
+      </div>
     </div>
   </div>
 </template>
@@ -123,6 +150,8 @@ import SchemaEditor from './components/SchemaEditor.vue';
 import JsonViewer from './components/JsonViewer.vue';
 import WriterMapComponent from './components/WriterMapComponent.vue';
 import ReaderMapComponent from './components/ReaderMapComponent.vue';
+import DashboardPage from './views/DashboardPage.vue';
+
 const tabs = ref(null);
 const parentFields = ref([]);
 const childFields = ref([]);
@@ -146,6 +175,9 @@ const isDataViewerOpen = ref(false);
 
 // The current editor mode - an enum of maps or schema.
 const currentEditor = ref('schema');
+
+// The current view - an enum of App or DashboardPage.
+const currentView = ref('App');
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -210,6 +242,10 @@ const handleTransitionEnd = (e) => {
  */
 const handleGeoJsonData = (geoJsonData) => {
   savedGeoJsonData.value = geoJsonData;
+}
+
+const goToDashboard = () => {
+  currentView.value = 'DashboardPage';
 }
 </script>
 
