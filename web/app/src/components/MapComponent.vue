@@ -1,3 +1,10 @@
+<!-- MapComponent.vue
+
+@TODO:
+  - This entire component needs a thorough refactor.
+  - Zoom in on the query points
+  - Add infocards for each point as a tool tip (map interactivity)
+-->
 <template>
   <div id="map-container">
     <div id="map"></div>
@@ -21,12 +28,16 @@ export default {
     name: "MapComponent",
     props: {
         queryResult: {
-            type: Array, 
+            type: Array,
             default: () => [],
         },
         hoveredBoundary: {
-            type: Object, 
+            type: Object,
             default: null,
+        },
+        geoJsonData: {
+            type: Array,
+            default: () => [],
         },
     },
     data() {
@@ -51,7 +62,7 @@ export default {
             },
             geoJsonLayers: [],
 
-            // Layer holds the markers for the query result lat/long s 
+            // Layer holds the markers for the query result lat/long s
             markerLayer: null,
 
             // hoverLayer holds the incoming map boundary, from hover on the
@@ -85,42 +96,111 @@ export default {
         },
     },
     methods: {
+
+        // The next 3 methods are copied from WriterMapComponent.vue
+        // TODO: Move them to a shared location.
+
+        /* Flatten a nested json object to a single level.
+
+        * Only unnests objects, not arrays.
+        *
+        * @param {Object} obj - The object to flatten.
+        * @param {string} parentKey - A key used to store data in the result.
+        * @param {Object} result - A dict that stores state between invocations.
+        *
+        * @returns {Object} The flattened object.
+        */
+        flattenObject(obj, parentKey = '', result = {}) {
+          for (const key in obj) {
+            const value = obj[key];
+            const newKey = parentKey ? `${parentKey}.${key}` : key;
+
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+              this.flattenObject(value, newKey, result);
+            } else {
+              result[newKey] = value;
+            }
+          }
+          return result;
+        },
+        /* Detect latitude and longitude keys in a flattened json object.
+        *
+        * @param {Object} flattenedData - The flattened json object.
+        * @returns {Object} An object with the latitude and longitude keys.
+        */
+        detectLatLong(flattenedData) {
+          const latKeys = ['lat', 'latitude', 'lt'];
+          const longKeys = ['long', 'longitude', 'lon', 'lng', 'ln'];
+
+          for (const key in flattenedData) {
+            if (latKeys.some(k => key.toLowerCase().includes(k))) {
+              for (const otherKey in flattenedData) {
+                if (longKeys.some(k => otherKey.toLowerCase().includes(k))) {
+                  return { latKey: key, lonKey: otherKey };
+                }
+              }
+            }
+          }
+        },
+
+        /* Process the joined data into points.
+        *
+        * - First identify the lat/lon keys in the joined data.
+        * - Then extracts the coordinates from the data as an array of points.
+        *
+        * @param {Array} newData - The joined data.
+        * @returns {Array} The points.
+        */
+        processMapPoints(newData) {
+          let latKey = null;
+          let lonKey = null;
+          const points = [];
+
+          for (const item of newData) {
+            const flattened = this.flattenObject(item);
+
+            // Find lat/lon keys if not already found
+            if (!latKey || !lonKey) {
+              const detectedKeys = this.detectLatLong(flattened);
+              if (!detectedKeys) continue;
+              ({ latKey, lonKey } = detectedKeys);
+            }
+
+            // Extract coordinates
+            if (latKey in flattened && lonKey in flattened) {
+              const lat = parseFloat(flattened[latKey]);
+              const lon = parseFloat(flattened[lonKey]);
+              points.push({ lat, lon });
+            }
+          }
+
+          return points;
+        },
+
+        // End copied methods from WriterMapComponent.vue
+
         initializeMap() {
-            // Initialize the map and set the view to the Periyar area
-            this.map = L.map("map", { 
+            // Initialize the map without setting the view
+            this.map = L.map("map", {
                 attributionControl: false,
-                zoomControl: false, 
-            }).setView(
-                [9.486, 77.307], 
-                10
-            );
+                zoomControl: false,
+            });
 
             // Add the Esri Gray (Light) basemap
             this.baseLayers.dark.addTo(this.map);
 
-            // Load GeoJSON layers
+            // Load GeoJSON layers and fit bounds
             this.loadGeoJsonData();
         },
         loadGeoJsonData() {
-            // Load periyar_boundary
-            fetch("/data/trap/boundary.geojson")
-            .then(response => response.json())
-            .then(data => {
-                const boundaryLayer = L.geoJSON(data, {
-                    style: { 
-                        color: "#1b5653", 
-                        weight: 2, 
-                        fillOpacity: 0.3 
-                    },
-                }).addTo(this.map);
-                this.geoJsonLayers.push(boundaryLayer);
-            });
+            if (!this.geoJsonData) return;
 
-            // Load periyar_stations
-            fetch("/data/trap/stations.geojson")
-            .then(response => response.json())
-            .then(data => {
-                const stationLayer = L.geoJSON(data, {
+            // Create a bounds object to track the extent of all layers
+            const bounds = L.latLngBounds([]);
+
+            this.geoJsonData.forEach(data => {
+                const layer = L.geoJSON(data, {
+                    // Points only: defines circle marker styling
                     pointToLayer: (feature, latlng) => {
                         return L.circleMarker(latlng, {
                             radius: 6,
@@ -131,10 +211,23 @@ export default {
                             fillOpacity: 0.8,
                         });
                     },
+
+                    // Non-points only: defines polygons/lines styling
+                    style: (feature) => {
+                        return feature.geometry.type === 'Point' ? undefined : {
+                            color: "#1b5653",
+                            weight: 2,
+                            fillOpacity: 0.3
+                        };
+                    },
+
+                    // All features: adds interactivity
                     onEachFeature: (feature, layer) => {
-                        if (feature.properties && feature.properties.name) {
-                            layer.bindPopup(
-                                feature.properties.name).openPopup();
+                        // Add popups and tooltips only for points
+                        if (
+                            feature.geometry.type === 'Point' &&
+                            feature.properties?.name) {
+                            layer.bindPopup(feature.properties.name);
                             layer.bindTooltip(feature.properties.name, {
                                 permanent: false,
                                 direction: "top",
@@ -143,7 +236,18 @@ export default {
                         }
                     },
                 }).addTo(this.map);
-                this.geoJsonLayers.push(stationLayer);
+
+                this.geoJsonLayers.push(layer);
+
+                // Extend the bounds to include this layer
+                bounds.extend(layer.getBounds());
+            });
+
+            // Fit the map to the bounds with some padding
+            if (!bounds.isValid()) return;  // Safety check if no valid bounds
+            this.map.fitBounds(bounds, {
+                padding: [50, 50],  // Add 50px padding around the bounds
+                maxZoom: 16        // Prevent zooming in too far
             });
         },
         toggleDropdown() {
@@ -160,21 +264,21 @@ export default {
         },
         updateMarkers(data) {
             if (!data) {
-                return 
+                return
             }
+            const points = this.processMapPoints(data);
+            console.log(`MapComponents points ${points.length}, ${Object.keys(points[0])}`);
             if (this.markerLayer) {
                 this.map.removeLayer(this.markerLayer);
             }
 
             this.markerLayer = L.layerGroup();
-            data.forEach(item => {
-                if (item.picture && 
-                item.picture.latitude && 
-                item.picture.longitude) {
-                    const lat = item.picture.latitude;
-                    const lng = item.picture.longitude;
+            points.forEach(point => {
+                if (point.lat && point.lon) {
+                    const lat = point.lat;
+                    const lng = point.lon;
                     const marker = L.circleMarker([lat, lng], {
-                        radius: 2, 
+                        radius: 2,
                         fillColor: "#3388ff",
                         color: "#3388ff",
                         weight: 1,
@@ -222,7 +326,7 @@ export default {
 
 .dropdown-toggle,
 .dropdown-menu li {
-  font-size: 14px; 
+  font-size: 14px;
   border-radius: 8px;
 }
 
