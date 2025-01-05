@@ -31,30 +31,52 @@
     - Displays the map
     - Detects lat/lon columns from the joined
     - Displays lat/lon as markers on the map
+
+  @TODO:
+  - Figure out consistent UI controls for Dashboard and Home. Right now the
+    data viewer and file upload cause UI mis matches because of behavior
+    explained in comments in the code.
+
+  - Figure out how to manage the separator prop when tab names contain '.'.
+
+  - Figure out how to flag malformed excel sheets, and surface expectations.
+
+  - Keep only permanent fixtures in app.vue: data viewer, background etc. Move
+    everything else into its own component, and emit data back up for
+    communication.
 -->
 <template>
   <div id="app">
-    <!-- HACK
-      - This is so hack but it will have to do for now.
-        There is some issue with css background url not fetching images from
-        assets/ in vue3.
-      - The ideal solution would be to use router-link and navigate to the
-        dashboard but that requires a global definition of props.
-    -->
-    <DashboardPage
-    v-if="currentView === 'DashboardPage'"
-    :schema="{}"
-    :geoJsonData="savedGeoJsonData"
-    :joinedData="joinedData"
-    @goBack="currentView = 'App'"
-    />
-    <div v-else>
-      <!-- HACK
+    <div class="background"></div>
 
-        - Move this into EditorComponent.vue and keep App.vue clean.
-      -->
-      <div class="background"></div>
-      <div class="content" :class="{ 'dragging': isDataViewerOpen }">
+
+    <!-- Content positioning
+      - Two dynamic classes are added to the content div
+        1. dragging: This pushes the editor so users can see both panels
+          simultaneously.
+        2. with-padding: This prevents the file upload from hiding editor
+          panels on page load.
+
+      - Neither of these apply to the Dashboard page.
+        1. The dashboard page is not setup to dynamically handle the "pushing"
+          behaviour. This is a nice to have.
+        2. The dashboard page does not have the file upload, so the extra
+          padding just messes up the layout.
+    -->
+    <div class="content" :class="{
+      'dragging': isDataViewerOpen && $route.name != 'Dashboard',
+      'with-padding': $route.name != 'Dashboard'
+      }">
+      <!-- Only show router-view when navigating to dashboard -->
+      <router-view
+        v-if="$route.name === 'Dashboard'"
+        :schema="joinedData ? {schema: joinedData[0]} : { schema: {} }"
+        :geoJsonData="savedGeoJsonData"
+        :data="joinedData"
+      ></router-view>
+
+      <!-- Only show main content when not on dashboard -->
+      <template v-else>
         <FileUpload @fileParsed="handleFileParsed" />
         <TabComponent
           v-if="tabs"
@@ -104,40 +126,48 @@
             </button>
           </div>
         </div>
-      </div>
-      <div
+      </template>
+    </div>
+
+    <!-- Positioning of the data viewer panel
+
+      - The data viewer panel shows up on all pages, so it's positioned outside
+        the content div.
+      - It's opening is conditioned on the DataViewerOpen flag, which is reset
+        every route exection.
+    -->
+    <div
       class="data-viewer-wrapper"
       :class="{ 'expanded': isDataViewerOpen }"
       @transitionend="handleTransitionEnd"
-      >
-        <!-- A note on the JsonViewer:
-        Do not v-if the JsonViewer as it computes joins from data in the
-        drag/drop. v-show is fine, but feels less responsive.
-        -->
-        <JsonViewer
-          :fullData="fullData"
-          :parentTab="parentTabSelected"
-          :parentFieldsWithJoins="parentFieldsWithJoins"
-          @joinedData="handleJoinedData"
-        />
-        <ReaderMapComponent
-          v-if="isDataViewerOpen && isTransitionComplete && savedGeoJsonData.length"
-          :geoJsonData="savedGeoJsonData"
-          map-id="reader-map-1"
-        />
-        <div
-        class="dashboard-button"
-        v-if="currentView === 'App' && isDataViewerOpen">
-          <button @click="goToDashboard">Fomosphere</button>
-        </div>
-      </div>
+    >
+      <!-- A note on the JsonViewer:
+      Do not v-if the JsonViewer as it computes joins from data in the
+      drag/drop. v-show is fine, but feels "less responsive" (product).
+      -->
+      <JsonViewer
+        :fullData="fullData"
+        :parentTab="parentTabSelected"
+        :parentFieldsWithJoins="parentFieldsWithJoins"
+        @joinedData="handleJoinedData"
+      />
+      <ReaderMapComponent
+        v-if="isDataViewerOpen && isTransitionComplete && savedGeoJsonData.length"
+        :geoJsonData="savedGeoJsonData"
+        map-id="reader-map-1"
+      />
       <div
+      class="dashboard-button"
+      v-if="isDataViewerOpen">
+        <button @click="goToDashboard">Fomosphere</button>
+      </div>
+    </div>
+    <div
       class="file-edge"
       @click="toggleJsonViewer"
       :class="{ 'expanded': isDataViewerOpen }"
-      >
-        <span class="file-label">data</span>
-      </div>
+    >
+      <span class="file-label">data</span>
     </div>
   </div>
 </template>
@@ -150,7 +180,9 @@ import SchemaEditor from './components/SchemaEditor.vue';
 import JsonViewer from './components/JsonViewer.vue';
 import WriterMapComponent from './components/WriterMapComponent.vue';
 import ReaderMapComponent from './components/ReaderMapComponent.vue';
-import DashboardPage from './views/DashboardPage.vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 
 const tabs = ref(null);
 const parentFields = ref([]);
@@ -166,8 +198,8 @@ const savedGeoJsonData = ref([]);
 const isTransitionComplete = ref(false);
 
 // Separator used to join the child tab name with the child field name.
-// TODO: What do we do if the child tab name contains a '.'? maybe this should
-// be a prop.
+// TODO: What do we do if the child tab name contains a '.'?. This is a prop
+// right now, but we need to handle modifying it.
 const separator = ref('.');
 
 // Flag to determine if the side panel json viewer is open.
@@ -175,9 +207,6 @@ const isDataViewerOpen = ref(false);
 
 // The current editor mode - an enum of maps or schema.
 const currentEditor = ref('schema');
-
-// The current view - an enum of App or DashboardPage.
-const currentView = ref('App');
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -245,7 +274,10 @@ const handleGeoJsonData = (geoJsonData) => {
 }
 
 const goToDashboard = () => {
-  currentView.value = 'DashboardPage';
+  toggleJsonViewer();
+  router.push({
+    name: 'Dashboard',
+  });
 }
 </script>
 
@@ -308,11 +340,14 @@ const goToDashboard = () => {
 }
 
 .content {
-  padding-top: 70px;
   transition: margin-right 0.3s ease;
 }
 
-.content.shifted {
+.content.with-padding {
+  padding-top: 70px;
+}
+
+.content.dragging {
   margin-right: 25%;
 }
 
