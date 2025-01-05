@@ -15,7 +15,7 @@
         <option disabled value="">Select Z-Axis (Optional)</option>
         <!-- Optional Z-Axis: this generates a null in the dropdown -->
         <option v-for="field in numericFields" :key="field" :value="field">{{ field }}</option>
-        <option :value="null">None</option> 
+        <option :value="null">None</option>
       </select>
 
       <button @click="generatePlot" class="plot-button">Plot</button>
@@ -51,11 +51,40 @@ export default {
             }
         });
 
+        const separator = "->";
+
         const surveyFields = computed(() => {
-            return props.queryResult?.length > 0 && props.queryResult[0].survey
-                ? Object.keys(props.queryResult[0].survey)
-                : [];
+            if (!props.queryResult?.length) return [];
+
+            const fields = [];
+            const firstRow = props.queryResult[0];
+
+            for (const [key, value] of Object.entries(firstRow)) {
+                if (typeof value === 'object' && value !== null) {
+                    // Handle nested object - add only non-object children
+                    for (const [nestedKey, nestedValue] of Object.entries(value)) {
+                        if (typeof nestedValue !== 'object' || nestedValue === null) {
+                            fields.push(`${key}${separator}${nestedKey}`);
+                        }
+                    }
+                } else {
+                    // Add non-object fields directly
+                    fields.push(key);
+                }
+            }
+
+            return fields;
         });
+
+        // Get the value of a field from the query result.
+        // Handles the separator for nested fields.
+        const getFieldValue = (data, key) => {
+            if (!key.includes(separator)) {
+                return data[key];
+            }
+            const [parentKey, childKey] = key.split(separator);
+            return data[parentKey]?.[childKey];
+        };
 
         const yAxisField = ref(null);
         const xAxisField = ref(null);
@@ -70,16 +99,16 @@ export default {
         // Goes through 10 values of the fieldName in the given dataset.
         // If it encounters numerics all along, assumes it is numeric.
         function isNumericField(fieldName, data) {
-            const sampleSize = Math.min(data.length, 10); 
+            const sampleSize = Math.min(data.length, 10);
             for (let i = 0; i < sampleSize; i++) {
-                const value = data[i].survey[fieldName];
+                const value = getFieldValue(data[i], fieldName);
                 if (isNaN(parseFloat(value))) {
                     return false;
                 }
-            }                
+            }
             return true;
         }
-        
+
         // Computed property to filter numeric fields for the Z-axis
         const numericFields = computed(() => {
             return surveyFields.value.filter(field => isNumericField(field, props.queryResult));
@@ -90,9 +119,9 @@ export default {
                 alert("Please select at least two fields to plot");
                 return;
             }
- 
+
             // Wait until the DOM has been updated
-            // TODO(prashanth@): sometimes the chart element gets "detached". 
+            // TODO(prashanth@): sometimes the chart element gets "detached".
             // Figure out why.
             await nextTick();
 
@@ -103,9 +132,9 @@ export default {
 
             const chartData = props.queryResult.map(item => {
                 return {
-                    x: item.survey[xAxisField.value],
-                    y: item.survey[yAxisField.value],
-                    r: zAxisField.value ? item.survey[zAxisField.value] || 5 : undefined,
+                    x: getFieldValue(item, xAxisField.value),
+                    y: getFieldValue(item, yAxisField.value),
+                    r: zAxisField.value ? getFieldValue(item, zAxisField.value) || 5 : undefined,
                 };
             });
 
@@ -124,22 +153,22 @@ export default {
                         label: `${yAxisField.value} vs ${xAxisField.value}`,
                         data: chartData,
                         // Transparent bubble
-                        backgroundColor: "rgba(0, 123, 255, 0.5)", 
+                        backgroundColor: "rgba(0, 123, 255, 0.5)",
                         borderColor: "rgba(0, 123, 255, 1)",
                     }]
                 },
                 options: {
-                    responsive: true, 
+                    responsive: true,
                     plugins: {
                         legend: { display: false }
                     },
                     scales: {
                         x: xIsNumeric
                         ? { type: 'linear', title: { display: true, text: xAxisField.value } }
-                        : { type: 'category', labels: [...new Set(props.queryResult.map(item => item.survey[xAxisField.value]))] },
+                        : { type: 'category', labels: [...new Set(props.queryResult.map(item => item[xAxisField.value]))] },
                         y: yIsNumeric
                         ? { type: 'linear', title: { display: true, text: yAxisField.value } }
-                        : { type: 'category', labels: [...new Set(props.queryResult.map(item => item.survey[yAxisField.value]))] }
+                        : { type: 'category', labels: [...new Set(props.queryResult.map(item => item[yAxisField.value]))] }
                     }
                 }
             });
