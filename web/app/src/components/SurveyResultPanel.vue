@@ -1,3 +1,9 @@
+<!-- SurveyResultPanel.vue
+
+@TODO:
+  - This entire component needs a thorough refactor.
+  - What if the original excel column name contained the Separator? (e.g. "survey->age") - right now we disallow both "." and "->"
+-->
 <template>
   <div class="survey-result-panel">
     <div class="control-section">

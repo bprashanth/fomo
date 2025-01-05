@@ -1,4 +1,12 @@
 <template>
+    <!-- TODO:
+      - Reinstate this click handler.
+      - Add a check for the imageUrl to be a valid image.
+      - If not, display a placeholder image.
+      - Replace the placeholder text in the popup.
+      - Debug failing fonts in the modal.
+    -->
+    <!-- <div v-if="imageUrl" class="image-container" @click="openPopup"> -->
     <div v-if="imageUrl" class="image-container" @click="openPopup">
         <img :src="imageUrl" alt="Selected Image">
     </div>
@@ -42,7 +50,7 @@
                 </div>
             </div>
         </div>
-    </div>    
+    </div>
 </template>
 
 <script setup>
@@ -54,9 +62,9 @@ const props = defineProps({
     queryResult: Array,
 });
 
-const showPopup = ref(false); 
-const lastImageUrl = ref(null); 
-const matchingRecord = ref(null); 
+const showPopup = ref(false);
+const lastImageUrl = ref(null);
+const matchingRecord = ref(null);
 const topPlantResult = computed(() => plantNetResult.results[0]);
 // const gbifLink = computed(() => `https://www.gbif.org/species/${topPlantResult.value.gbif.id}`);
 
@@ -65,39 +73,46 @@ const imageUrl = computed(() => {
     if (!props.field) return lastImageUrl.value;
 
     const textContent = props.field.textContent || '';
-    if (textContent.includes('/data/')) {
-        return textContent.trim().replace(/['"]+/g, '');
+    const cleanContent = textContent.trim().replace(/['"]+/g, '');
+
+    // Now test the cleaned content
+    if (cleanContent.includes('/data/') ||
+        /\.(jpg|jpeg|png|webp)$/i.test(cleanContent)) {
+        console.log("imageUrl computed, returning: ", cleanContent);
+        return cleanContent;
     }
+
+    console.log("imageUrl computed failed, returning: ", lastImageUrl.value);
     return lastImageUrl.value;
 })
 
-// Why do we need watchEffect? 
+// Why do we need watchEffect?
 //
-// The computed blocks above can't be used to set matchingRecord. 
-// The only way to set matchingRecord is in a standalone watch block, or in its 
-// own computed block. If we use another computed block for matchingRecord 
+// The computed blocks above can't be used to set matchingRecord.
+// The only way to set matchingRecord is in a standalone watch block, or in its
+// own computed block. If we use another computed block for matchingRecord
 // however we will run into the problem of having to check if the clicked field
-// is a url field or not, and in the case of it not being a url field, 
-// returning the lastMatchingRecord. We can't return null or the modal will 
-// stop displaying the image's details. 
+// is a url field or not, and in the case of it not being a url field,
+// returning the lastMatchingRecord. We can't return null or the modal will
+// stop displaying the image's details.
 //
-// How does this work now? 
+// How does this work now?
 //
-// If imageURL has been updated (which will only happen when the user clicks 
-// on  a /data/ link), also update the lastImageUrl and lastMatchingRecord 
+// If imageURL has been updated (which will only happen when the user clicks
+// on  a /data/ link), also update the lastImageUrl and lastMatchingRecord
 // values.
-// When the user clicks on other non-url fields we want to ignore and 
-// continue showing the previously clicked image details. 
+// When the user clicks on other non-url fields we want to ignore and
+// continue showing the previously clicked image details.
 
 watchEffect(() => {
   if (imageUrl.value && imageUrl.value !== lastImageUrl.value) {
-    lastImageUrl.value = imageUrl.value; 
+    lastImageUrl.value = imageUrl.value;
     if (props.queryResult) {
         matchingRecord.value = props.queryResult.find(
-            record => record.picture && 
+            record => record.picture &&
             record.picture.imageURL === imageUrl.value
         ) || {};
-    } 
+    }
   }
 });
 
@@ -129,12 +144,12 @@ img {
     border-radius: 8px;
 }
 
-/* Image popup 
- * 
+/* Image popup
+ *
  * popup-overlay: is the blurry background.
  * popup-card: is the container for both the image and the text.
  * popup-image: is the left half of popup-card, the image.
- * popup-description: is the right half of the popup-card, the text. 
+ * popup-description: is the right half of the popup-card, the text.
  */
 
 .popup-overlay {
@@ -175,8 +190,8 @@ img {
     object-fit: contain;
     height: auto;
     /* Reduce to 50% to get consistent borders.
-     * 
-     * We don't know the dimension of the user uploaded images. Reducing 
+     *
+     * We don't know the dimension of the user uploaded images. Reducing
      * this width could avoid cropping.
      */
     width: 100%;
@@ -215,11 +230,11 @@ img {
     line-height: 1.5em;
     word-wrap: break-word;
     flex-grow: 1;
-    overflow-y: auto; 
+    overflow-y: auto;
 }
 
 .popup-description-content p {
-    margin: 0; 
+    margin: 0;
     padding: 0;
 }
 
@@ -251,11 +266,11 @@ img {
     margin-top: 1em;
     font-size: calc(0.8vw + 0.5em);
     border: 1px solid #333;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); 
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 
     word-wrap: break-word;
     overflow-y: auto;
-    font-family: "Courier New", Courier, monospace; 
+    font-family: "Courier New", Courier, monospace;
     text-align: left;
     font-family: monospace;
 }
@@ -267,8 +282,8 @@ img {
 
 .ai-results-footer {
     display: flex;
-    justify-content: flex-end; 
-    padding-top: 10px; 
+    justify-content: flex-end;
+    padding-top: 10px;
 }
 
 .ai-results-footer strong {
@@ -285,4 +300,4 @@ img {
   color: #ada579;
 }
 
-</style> 
+</style>
