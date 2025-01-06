@@ -31,67 +31,126 @@
     - Displays the map
     - Detects lat/lon columns from the joined
     - Displays lat/lon as markers on the map
+
+  @TODO:
+  - Figure out consistent UI controls for Dashboard and Home. Right now the
+    data viewer and file upload cause UI mis matches because of behavior
+    explained in comments in the code.
+
+  - Figure out how to manage the separator prop when tab names contain '.'.
+
+  - Figure out how to flag malformed excel sheets, and surface expectations.
+
+  - Keep only permanent fixtures in app.vue: data viewer, background etc. Move
+    everything else into its own component, and emit data back up for
+    communication.
+
+  - Move the data viewer into a component. It's only going to grow. Make the
+    NEXT chevron button understand the right next page to go to via the click
+    handler.
 -->
 <template>
   <div id="app">
     <div class="background"></div>
-    <div class="content" :class="{ 'dragging': isDataViewerOpen }">
-      <FileUpload @fileParsed="handleFileParsed" />
-      <TabComponent
-        v-if="tabs"
-        :tabs="tabs"
-        title="Child Dataset"
-        @tabSelected="handleChildTabSelected"
-        @tabReordered="handleParentTabSelected"
-      />
-      <div class="schema-section" v-if="tabs">
-        <!-- A note on the v-show/v-if split:
-          - v-show is used on SchemaEditor because v-if will unmount/remount
-            the component on button toggle. This will reset the joined tabs UI.
-          - v-if is used on MapsComponent because v-show will keep sending
-            joinedData as an update every time it's modified by the json viewer.
-            This causes very slow map renders.
-        -->
-        <SchemaEditor
-          v-show="currentEditor === 'schema'"
-          :parentFields="parentFields"
-          :childFields="childFields"
-          :childTabSelected="childTabSelected"
-          :separator="separator"
-          @parentFieldsWithJoins="handleParentFieldsWithJoins"
+
+
+    <!-- Content positioning
+      - Two dynamic classes are added to the content div
+        1. dragging: This pushes the editor so users can see both panels
+          simultaneously.
+        2. with-padding: This prevents the file upload from hiding editor
+          panels on page load.
+
+      - Neither of these apply to the Dashboard page.
+        1. The dashboard page is not setup to dynamically handle the "pushing"
+          behaviour. This is a nice to have.
+        2. The dashboard page does not have the file upload, so the extra
+          padding just messes up the layout.
+
+      - The router view is intentionally placed within the content div.
+        Otherwise vue3 gets confused. It is wrapped in a transition to time it's entry with the closing of the data panel (responsive UI).
+    -->
+    <div class="content" :class="{
+      'dragging': isDataViewerOpen && $route.name != 'Dashboard',
+      'with-padding': $route.name != 'Dashboard'
+      }">
+      <router-view
+        :schema="joinedData ? {schema: joinedData[0]} : { schema: {} }"
+        :geoJsonData="savedGeoJsonData"
+        :data="joinedData"
+        v-if="$route.name === 'Dashboard'"
+      ></router-view>
+
+      <!-- Only show main content when not on dashboard -->
+      <template v-else>
+        <FileUpload @fileParsed="handleFileParsed" />
+        <TabComponent
+          v-if="tabs"
+          :tabs="tabs"
+          title="Child Dataset"
+          @tabSelected="handleChildTabSelected"
+          @tabReordered="handleParentTabSelected"
         />
-        <WriterMapComponent
-          v-if="currentEditor === 'maps'"
-          :joinedData="joinedData"
-          :geoJsonData="savedGeoJsonData"
-          @geoJsonData="handleGeoJsonData"
-        />
-        <div class="editor-switcher">
-          <button
-            :disabled="currentEditor === 'schema'"
-            @click="currentEditor = 'schema'"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button
-            :disabled="currentEditor === 'maps'"
-            @click="currentEditor = 'maps'"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+        <div class="schema-section" v-if="tabs">
+          <!-- A note on the v-show/v-if split:
+            - v-show is used on SchemaEditor because v-if will unmount/remount
+              the component on button toggle. This will reset the joined tabs UI.
+            - v-if is used on MapsComponent because v-show will keep sending
+              joinedData as an update every time it's modified by the json viewer.
+              This causes very slow map renders.
+          -->
+          <SchemaEditor
+            v-show="currentEditor === 'schema'"
+            :parentFields="parentFields"
+            :childFields="childFields"
+            :childTabSelected="childTabSelected"
+            :separator="separator"
+            @parentFieldsWithJoins="handleParentFieldsWithJoins"
+          />
+          <WriterMapComponent
+            v-if="currentEditor === 'maps'"
+            :joinedData="joinedData"
+            :geoJsonData="savedGeoJsonData"
+            @geoJsonData="handleGeoJsonData"
+          />
+          <div class="editor-switcher">
+            <button
+              :disabled="currentEditor === 'schema'"
+              @click="currentEditor = 'schema'"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button
+              :disabled="currentEditor === 'maps'"
+              @click="currentEditor = 'maps'"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
+    <!-- Positioning of the data viewer panel
+
+      - The data viewer panel shows up on all pages, so it's positioned outside
+        the content div.
+      - It's opening is conditioned on the DataViewerOpen flag, which is reset
+        every route exection.
+    -->
     <div
-    class="data-viewer-wrapper"
-    :class="{ 'expanded': isDataViewerOpen }"
-    @transitionend="handleTransitionEnd"
+      class="data-viewer-wrapper"
+      :class="{ 'expanded': isDataViewerOpen }"
+      @transitionend="handleTransitionEnd"
     >
+      <!-- A note on the JsonViewer:
+      Do not v-if the JsonViewer as it computes joins from data in the
+      drag/drop. v-show is fine, but feels "less responsive" (product).
+      -->
       <JsonViewer
         :fullData="fullData"
         :parentTab="parentTabSelected"
@@ -103,12 +162,27 @@
         :geoJsonData="savedGeoJsonData"
         map-id="reader-map-1"
       />
+      <div
+      class="dashboard-button-container"
+      v-if="isDataViewerOpen">
+        <button
+        class="dashboard-button"
+        @click="savedGeoJsonData.length && joinedData.length ? goToDashboard() : null"
+        :class="{ 'active': savedGeoJsonData.length && joinedData.length }"
+        >
+          NEXT
+          <!-- SVG Chevron for >> -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 6L14 12L8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 6L20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
     </div>
-
     <div
-    class="file-edge"
-    @click="toggleJsonViewer"
-    :class="{ 'expanded': isDataViewerOpen }"
+      class="file-edge"
+      @click="toggleJsonViewer"
+      :class="{ 'expanded': isDataViewerOpen }"
     >
       <span class="file-label">data</span>
     </div>
@@ -123,6 +197,10 @@ import SchemaEditor from './components/SchemaEditor.vue';
 import JsonViewer from './components/JsonViewer.vue';
 import WriterMapComponent from './components/WriterMapComponent.vue';
 import ReaderMapComponent from './components/ReaderMapComponent.vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
 const tabs = ref(null);
 const parentFields = ref([]);
 const childFields = ref([]);
@@ -137,8 +215,8 @@ const savedGeoJsonData = ref([]);
 const isTransitionComplete = ref(false);
 
 // Separator used to join the child tab name with the child field name.
-// TODO: What do we do if the child tab name contains a '.'? maybe this should
-// be a prop.
+// TODO: What do we do if the child tab name contains a '.'?. This is a prop
+// right now, but we need to handle modifying it.
 const separator = ref('.');
 
 // Flag to determine if the side panel json viewer is open.
@@ -211,6 +289,13 @@ const handleTransitionEnd = (e) => {
 const handleGeoJsonData = (geoJsonData) => {
   savedGeoJsonData.value = geoJsonData;
 }
+
+const goToDashboard = () => {
+  toggleJsonViewer();
+  router.push({
+    name: 'Dashboard',
+  });
+}
 </script>
 
 <style scoped>
@@ -272,11 +357,14 @@ const handleGeoJsonData = (geoJsonData) => {
 }
 
 .content {
-  padding-top: 70px;
   transition: margin-right 0.3s ease;
 }
 
-.content.shifted {
+.content.with-padding {
+  padding-top: 70px;
+}
+
+.content.dragging {
   margin-right: 25%;
 }
 
@@ -383,6 +471,55 @@ const handleGeoJsonData = (geoJsonData) => {
   left: 50%;
   transform-origin: left center;
 }
+
+/* "Next page" button styling */
+.dashboard-button-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dashboard-button {
+  width: 40%;
+  background-color: #2c2c2c;
+  border: 1px solid #3d3d3d;
+  color: #808080;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  cursor: default;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.dashboard-button.active {
+  background-color: #2c2c3a;
+  border: 1px solid #3d3d4f;
+  color: #5FB1E0;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.dashboard-button.active:hover {
+  background-color: #3d3d4f;
+  border-color: #4a4a5f;
+}
+
+.dashboard-button svg {
+  width: 1.2em;
+  height: 1.2em;
+  transition: transform 0.2s ease;
+}
+
+.dashboard-button:hover svg {
+  transform: translateX(6px);
+}
+/* End of "Next page" button styling */
 
 </style>
 
