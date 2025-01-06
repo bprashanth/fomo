@@ -44,6 +44,10 @@
   - Keep only permanent fixtures in app.vue: data viewer, background etc. Move
     everything else into its own component, and emit data back up for
     communication.
+
+  - Move the data viewer into a component. It's only going to grow. Make the
+    NEXT chevron button understand the right next page to go to via the click
+    handler.
 -->
 <template>
   <div id="app">
@@ -62,17 +66,19 @@
           behaviour. This is a nice to have.
         2. The dashboard page does not have the file upload, so the extra
           padding just messes up the layout.
+
+      - The router view is intentionally placed within the content div.
+        Otherwise vue3 gets confused. It is wrapped in a transition to time it's entry with the closing of the data panel (responsive UI).
     -->
     <div class="content" :class="{
       'dragging': isDataViewerOpen && $route.name != 'Dashboard',
       'with-padding': $route.name != 'Dashboard'
       }">
-      <!-- Only show router-view when navigating to dashboard -->
       <router-view
-        v-if="$route.name === 'Dashboard'"
         :schema="joinedData ? {schema: joinedData[0]} : { schema: {} }"
         :geoJsonData="savedGeoJsonData"
         :data="joinedData"
+        v-if="$route.name === 'Dashboard'"
       ></router-view>
 
       <!-- Only show main content when not on dashboard -->
@@ -157,9 +163,20 @@
         map-id="reader-map-1"
       />
       <div
-      class="dashboard-button"
+      class="dashboard-button-container"
       v-if="isDataViewerOpen">
-        <button @click="goToDashboard">Fomosphere</button>
+        <button
+        class="dashboard-button"
+        @click="savedGeoJsonData.length && joinedData.length ? goToDashboard() : null"
+        :class="{ 'active': savedGeoJsonData.length && joinedData.length }"
+        >
+          NEXT
+          <!-- SVG Chevron for >> -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 6L14 12L8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 6L20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     </div>
     <div
@@ -454,6 +471,55 @@ const goToDashboard = () => {
   left: 50%;
   transform-origin: left center;
 }
+
+/* "Next page" button styling */
+.dashboard-button-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dashboard-button {
+  width: 40%;
+  background-color: #2c2c2c;
+  border: 1px solid #3d3d3d;
+  color: #808080;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  cursor: default;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.dashboard-button.active {
+  background-color: #2c2c3a;
+  border: 1px solid #3d3d4f;
+  color: #5FB1E0;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.dashboard-button.active:hover {
+  background-color: #3d3d4f;
+  border-color: #4a4a5f;
+}
+
+.dashboard-button svg {
+  width: 1.2em;
+  height: 1.2em;
+  transition: transform 0.2s ease;
+}
+
+.dashboard-button:hover svg {
+  transform: translateX(6px);
+}
+/* End of "Next page" button styling */
 
 </style>
 
