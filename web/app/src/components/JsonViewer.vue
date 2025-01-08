@@ -1,4 +1,5 @@
 <!-- JsonViewer.vue
+  - Computes the joined data using the parentFieldsWithJoins and fullData
   - Displays the joined data
 
   @props:
@@ -11,6 +12,7 @@
     - joinedData: Array - The joined data (parent + child fields).
 
   @TODO:
+  - Decouple joining logic from the json viewer.
   - Display stats on data in json viewer panel.
   - Show the most recently joined sub-object.
   - Show a basic queryer.
