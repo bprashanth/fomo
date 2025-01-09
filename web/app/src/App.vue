@@ -57,6 +57,14 @@
   - Move the data viewer into a component. It's only going to grow. Make the
     NEXT chevron button understand the right next page to go to via the click
     handler.
+
+  - Isolate the lat/lon detection logic into a separate component. It is
+    currently duplicated in the JsonViewer, WriterMapComponent and SchemaPanel (code cargo culted from the POC). When this is done, use FeatureCollection
+    to store the geoJson data in props, instead of an array of features. This
+    will need modifications to processing code in the JsonViewer.
+
+  - Handle situations where there are no lat/lon keys in the joined data.
+    Surface this to the user so they might join more tabs/fields.
 -->
 <template>
   <div id="app">

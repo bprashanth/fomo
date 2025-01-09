@@ -29,6 +29,7 @@ Manages all elements in the data viewer side panel.
           :fullData="props.fullData"
           :parentTab="props.parentTabSelected"
           :parentFieldsWithJoins="props.parentFieldsWithJoins"
+          :savedGeoJsonData="props.savedGeoJsonData"
           @joinedData="handleJoinedData"
         />
         <ReaderMapComponent
