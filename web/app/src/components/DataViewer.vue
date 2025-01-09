@@ -20,46 +20,61 @@ Manages all elements in the data viewer side panel.
     :class="{ 'expanded': isDataViewerOpen }"
     @transitionend="handleTransitionEnd"
     >
-      <!-- A note on the JsonViewer:
-      Do not v-if the JsonViewer as it computes joins from data in the
-      drag/drop. v-show is fine, but feels "less responsive" (product).
-      -->
-      <JsonViewer
-        :fullData="props.fullData"
-        :parentTab="props.parentTabSelected"
-        :parentFieldsWithJoins="props.parentFieldsWithJoins"
-        @joinedData="handleJoinedData"
-      />
-      <ReaderMapComponent
-        v-if="isDataViewerOpen && isTransitionComplete && props.savedGeoJsonData.length"
-        :geoJsonData="props.savedGeoJsonData"
-        map-id="reader-map-1"
-      />
-      <div
-      class="dashboard-button-container"
-      v-if="isDataViewerOpen">
-        <button
-        class="dashboard-button"
-        @click="props.savedGeoJsonData.length && joinedData.length ? goToDashboard() : null"
-        :class="{ 'active': props.savedGeoJsonData.length && joinedData.length }"
+      <div class="active-viewer" v-show="activeViewer === 'data'">
+        <!-- A note on the JsonViewer:
+        Do not v-if the JsonViewer as it computes joins from data in the
+        drag/drop. v-show is fine, but feels "less responsive" (product).
+        -->
+        <JsonViewer
+          :fullData="props.fullData"
+          :parentTab="props.parentTabSelected"
+          :parentFieldsWithJoins="props.parentFieldsWithJoins"
+          @joinedData="handleJoinedData"
+        />
+        <ReaderMapComponent
+          v-if="isDataViewerOpen && isTransitionComplete && props.savedGeoJsonData.length"
+          :geoJsonData="props.savedGeoJsonData"
+          map-id="reader-map-1"
+        />
+        <div
+        class="dashboard-button-container"
+        v-if="isDataViewerOpen"
         >
-          NEXT
-          <!-- SVG Chevron for >> -->
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 6L14 12L8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M14 6L20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+          <button
+          class="dashboard-button"
+          @click="props.savedGeoJsonData.length && joinedData.length ? goToDashboard() : null"
+          :class="{ 'active': props.savedGeoJsonData.length && joinedData.length }"
+          >
+            NEXT
+            <!-- SVG Chevron for >> -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 6L14 12L8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 6L20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="active-viewer" v-show="activeViewer === 'insights'">
+        <h1>Insights</h1>
       </div>
     </div>
-    <div
-    class="file-edge"
-    @click="toggleJsonViewer"
-    :class="{ 'expanded': isDataViewerOpen }"
-    >
-      <span class="file-label">data</span>
+
+    <div class="file-edges-container">
+      <div
+      v-for="edge in fileEdges"
+      :key="edge.id"
+      class="file-edge"
+      @click="toggleViewer(edge.id)"
+      :class="{
+        'expanded': isDataViewerOpen && activeViewer === edge.id,
+        'hidden': isDataViewerOpen && activeViewer !== edge.id
+      }"
+      >
+        <span class="file-label">{{ edge.label }}</span>
+      </div>
     </div>
   </div>
+
 </template>
 
 <script setup>
@@ -70,6 +85,12 @@ import ReaderMapComponent from './ReaderMapComponent.vue';
 const isDataViewerOpen = ref(false);
 const isTransitionComplete = ref(false);
 const joinedData = ref([]);
+const activeViewer = ref(null);
+
+const fileEdges = ref([
+  { id: 'data', label: 'data' },
+  { id: 'insights', label: 'insights' },
+])
 
 const emit = defineEmits([
   'update-joined-data',
@@ -102,16 +123,17 @@ const handleJoinedData = (data) => {
 
 
 // Toggles the json viewer open/closed.
-const toggleJsonViewer = () => {
+const toggleViewer = (edgeId) => {
   if (!isDataViewerOpen.value) {
     isTransitionComplete.value = false;
   }
   isDataViewerOpen.value = !isDataViewerOpen.value;
+  activeViewer.value = edgeId;
   emit('data-viewer-open', isDataViewerOpen.value);
 };
 
 const goToDashboard = () => {
-  toggleJsonViewer();
+  toggleViewer(null);
   emit('navigate-dashboard');
 }
 </script>
@@ -122,8 +144,15 @@ const goToDashboard = () => {
  *
  * - The data-viewer-wrapper is the main container for the data viewer.
  * - It's positioned absolutely to the right of the screen.
+ * - The active-viewer class is just used to inherit properties for correct
+ *   positioning and to apply the v-show. See comment in code for why we use
+ *   v-show instead of v-if.
  * - It is toggled by the "file-edge" button click, which is also positioned
  *   absolutely and moves with the data viewer.
+ * - The movement of the file edges is worth noting. All the file edges toggle
+ *   into a special class, file-edge.expanded, when the use clicks any one. The
+ *   addition of this class triggers the ":has" pseudo class on the parent,
+ *   which expands the entire group by 25%.
  * - The "dashboard-button" (NEXT button) triggers the route transition in the
  *   parent. It's only enabled when there is a saved map/data.
  */
@@ -143,33 +172,80 @@ const goToDashboard = () => {
   justify-content: center;
 }
 
+.active-viewer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  right: 0;
+  top: 0;
+  overflow: hidden;
+  justify-content: center;
+}
+
 .data-viewer-wrapper.expanded {
   width: 25%;
 }
 
-/* File Edge keeps up with the data-viewer-wrapper */
-.file-edge.expanded {
-  right: 25%;
-}
-
-.file-edge {
-  width: 20px;
-  max-width: 20px;
-  height: 60px;
-  background-color: #9c7b59;
-  border-radius: 5px 0 0 5px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+/* File Edges container keeps up with the data-viewer-wrapper
+ * Magic numbers:
+ * - right: 15px puts the edges at the boundary of the data viewer. This must
+ *   match the width of the data-viewer-wrapper.
+ * - top: 0 puts the edges at the top of the screen.
+ */
+.file-edges-container {
   position: absolute;
   right: 15px;
   top: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  transition: right 0.5s ease;
+  gap: 2px;
+}
+
+/* File edge is the individual file edge button
+ * Magic numbers:
+ * - top: 100px moves all file edges vertically.
+ * - height: 100px is the height of the file edge button (i.e vertically, to
+ *    accomodate the file label).
+ */
+.file-edge {
+  width: 20px;
+  max-width: 20px;
+  height: 70px;
+  background-color: #9c7b59;
+  border-radius: 10px 0 0 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  position: relative;
+  right: 0;
+  top: 0px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: right 0.5s ease;
   z-index: 10;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.3s ease, right 0.5s ease;
 }
 
+.file-edge.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-edges-container:has(.file-edge.expanded) {
+  right: 25%;
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* File label is the text on the file edge button\
+ * Magic numbers:
+ * - top: 50% moves the label vertically within the file edge button.
+ */
 .file-label {
   font-family: monospace;
   font-size: 10px;
@@ -179,7 +255,7 @@ const goToDashboard = () => {
   border-radius: 3px;
   transform: rotate(-90deg);
   position: absolute;
-  top: 50%;
+  top: 90%;
   left: 50%;
   transform-origin: left center;
 }

@@ -63,8 +63,6 @@ const joinedData = computed(() => {
           childRecord[childField] === parentRecord[parentField]
         );
 
-        console.log('matches', matches, 'for', parentField, 'in', childTab, 'with', childField);
-
         // Create the new field name for the joined data.
         const joinedFieldName = `${childTab}.${childField}`;
 

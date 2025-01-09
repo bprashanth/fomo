@@ -25,7 +25,7 @@
 <template>
   <div class="file-upload-container">
     <div class="logo">
-      <img src="@/assets/logos/default.png" alt="logo">
+      <img src="@/assets/logos/default.webp" alt="logo">
     </div>
     <label for="file-input" class="upload-label">
       <span class="file-placeholder">Choose an excel dataset...</span>
