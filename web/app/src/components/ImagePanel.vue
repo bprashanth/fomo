@@ -51,66 +51,91 @@ const props = defineProps({
 });
 
 const showPopup = ref(false);
-const lastImageUrl = ref(null);
-const matchingRecord = ref(null);
-const clickedFieldPath = ref('');
-const clickedFieldIndex = ref(-1);
+const matchingFieldPath = ref('');
+const matchingRecordIndex = ref(-1);
+const imageUrl = ref('');
 
 
-const imageUrl = computed(() => {
-    if (!props.field) return lastImageUrl.value;
+// const imageUrl = computed(() => {
+//     if (!props.field) return lastImageUrl.value;
 
-    const textContent = props.field.textContent || '';
-    const cleanContent = textContent.trim().replace(/['"]+/g, '');
+//     const textContent = props.field.textContent || '';
+//     const cleanContent = textContent.trim().replace(/['"]+/g, '');
 
-    // Now test the cleaned content
-    if (cleanContent.includes('/data/') ||
-        /\.(jpg|jpeg|png|webp)$/i.test(cleanContent)) {
-        console.log("imageUrl computed, returning: ", cleanContent);
-        return cleanContent;
-    }
+//     // Now test the cleaned content
+//     if (cleanContent.includes('/data/') ||
+//         /\.(jpg|jpeg|png|webp)$/i.test(cleanContent)) {
+//         console.log("imageUrl computed, returning: ", cleanContent);
+//         return cleanContent;
+//     }
 
-    console.log("imageUrl computed failed, returning: ", lastImageUrl.value);
-    return lastImageUrl.value;
-})
+//     console.log("imageUrl computed failed, returning: ", lastImageUrl.value);
+//     return lastImageUrl.value;
+// })
+
+
+/**
+ * Updates the imageUrl based on the clicked field.
+ *
+ * The matchingRecord/FieldPath are used to retrieve the value of the field
+ * within props.queryResult. If this field is not a path to either a local
+ * image or a url to an image, it is ignored.
+ *
+ * @params
+ *  - props.queryResult: The query result array.
+ *  - matchingRecordIndex: The index of the matching record the user clicked on.
+ *  - matchingFieldPath: The jsonpath path to the field the user clicked on.
+ */
+const updateImageUrl = () => {
+  if (props.queryResult.length === 0 || matchingRecordIndex.value === -1 || matchingFieldPath.value === '') return;
+
+  const content = getValueByPath(
+    props.queryResult[matchingRecordIndex.value],
+      matchingFieldPath.value
+    );
+  console.log("ImagePanel: content url: ", content);
+  if (typeof content != 'string') {
+    console.warn('ImagePanel: content is not a string, skipping img update: ', content);
+    return;
+  }
+  const cleanContent = content.trim().replace(/['"]+/g, '');
+  if (cleanContent.includes('/data/') ||
+      /\.(jpg|jpeg|png|webp)$/i.test(cleanContent)) {
+      console.log("imageUrl computed: ", cleanContent);
+      imageUrl.value = cleanContent;
+  } else {
+    console.warn("ImagePanel: content is not a valid image url: ", cleanContent);
+  }
+}
 
 // Why do we need watchEffect?
 //
-// The computed blocks above can't be used to set matchingRecord.
-// The only way to set matchingRecord is in a standalone watch block, or in its
-// own computed block. If we use another computed block for matchingRecord
-// however we will run into the problem of having to check if the clicked field
-// is a url field or not, and in the case of it not being a url field,
-// returning the lastMatchingRecord. We can't return null or the modal will
-// stop displaying the image's details.
+// We want to update the imageUrl whenever the user clicks on a field that
+// contains an image url. This comes in via props.field, which is literally
+// just the html span element (say) the user clicks on.
 //
-// How does this work now?
+// We use this span element to reverse lookup the key:value pair in the
+// props.queryResult array (see comments above those functions). These values
+// are then recorded in matchingRecordIndex and matchingFieldPath.
 //
-// If imageURL has been updated (which will only happen when the user clicks
-// on  a /data/ link), also update the lastImageUrl and lastMatchingRecord
-// values.
-// When the user clicks on other non-url fields we want to ignore and
-// continue showing the previously clicked image details.
+// We can't use a computed block because we also want to update imageUrl from
+// button navigation within this component. So say we set imageUrl directly via
+// props.field, we would need a second mathod to set it via button navigation.
+// Currently, when the user clicks a button to move to the next/previous
+// picture, it updates the imageUrl based on the matchingRecordIndex and
+// matchingFieldPath values - which updateImageUrl knows how to handle.
 
 watchEffect(() => {
-  if (imageUrl.value && imageUrl.value !== lastImageUrl.value) {
-    lastImageUrl.value = imageUrl.value;
+  if (!props.field) return;
 
-    const { matchingIndex, matchingPath } = constructClickedFieldKeyPath();
-    clickedFieldPath.value = matchingPath;
-    clickedFieldIndex.value = matchingIndex;
-
-    console.log("ImagePanel: matching path: ", matchingPath);
-    console.log("ImagePanel: matching index: ", matchingIndex);
-    console.log("ImagePanel: value of clicked path: ",
-      getValueByPath(props.queryResult[matchingIndex], matchingPath));
-
-    if (props.queryResult) {
-        matchingRecord.value = props.queryResult.find(
-            record => record.picture &&
-            record.picture.imageURL === imageUrl.value
-        ) || {};
-    }
+  const { matchingIndex, matchingPath } = constructClickedFieldKeyPath();
+  if (matchingIndex > -1 && matchingPath) {
+    console.log("ImagePanel: matchingIndex: ", matchingIndex, "matchingPath: ", matchingPath);
+    matchingRecordIndex.value = matchingIndex;
+    matchingFieldPath.value = matchingPath;
+    updateImageUrl();
+  } else {
+    console.warn("ImagePanel: no matching index/path found for the clicked field.");
   }
 });
 
@@ -152,9 +177,12 @@ const getValueByPath = (obj, path) => {
  * that image onwards.
  */
 function constructClickedFieldKeyPath() {
-  if (!props.field || !props.queryResult) return {
-    matchingIndex: -1, matchingPath: ''
-  };
+  if (!props.field || !props.queryResult) {
+    console.warn("ImagePanel: no field or queryResult found.");
+    return {
+      matchingIndex: -1, matchingPath: ''
+    }
+  }
 
   const keyValue = props.field.textContent?.trim().replace(/['"]+/g, '') || '';
   const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
@@ -203,9 +231,12 @@ function constructClickedFieldKeyPath() {
  * @returns {Object} An object with the matching index and path.
  */
 function findMatchingObject(array, keyName, keyValue) {
-  if (!array || !keyName || !keyValue) return {
-    matchingIndex: -1, matchingPath: []
-  };
+  if (!array || !keyName || !keyValue) {
+    console.warn("ImagePanel: no array, keyName or keyValue found.");
+    return {
+      matchingIndex: -1, matchingPath: []
+    }
+  }
 
   let matchingIndex = -1;
   let matchingPath = '';
@@ -215,14 +246,18 @@ function findMatchingObject(array, keyName, keyValue) {
 
     for (const [key, value] of Object.entries(obj)) {
       const currentPath = [...path, key];
+      console.log("ImagePanel currentPath: ", currentPath);
 
       // Doesn't work for ints/lat/long etc.
       if (key === keyName && value === keyValue) {
         matchingPath = currentPath.join('.');
         return true;
+      } else {
+        console.log("ImagePanel: key/value not found, found values: ", key, value, " want values: ", keyName, keyValue);
       }
 
       if (typeof value === 'object') {
+        console.log("ImagePanel: traversing object: ", value);
         if (traverse(value, currentPath)) {
           return true;
         }
@@ -232,6 +267,7 @@ function findMatchingObject(array, keyName, keyValue) {
 
   for (let i = 0; i < array.length; i++) {
     if (traverse(array[i])) {
+      console.log("ImagePanel: found matching index: ", i, "matchingPath: ", matchingPath);
       matchingIndex = i;
       break;
     }
