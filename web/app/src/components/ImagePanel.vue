@@ -1,3 +1,10 @@
+<!-- ImagePanel.vue
+
+@TODO:
+  - This entire component needs a thorough refactor.
+  - Decouple clicking logic from the DOM created by the json-viewer library.
+-->
+
 <template>
     <!-- TODO:
       - Reinstate this click handler.
@@ -15,7 +22,21 @@
     <div v-if="showPopup" class="popup-overlay" @click.self="closePopup">
         <div class="popup-card">
             <div class="popup-image-container">
+
+                <!-- <button
+                class="nav-button"
+                @click="showPrevious" :disabled="!canNavigatePrevious">
+                  Previous
+                </button> -->
+
                 <img :src="imageUrl" alt="Full Image" class="popup-image"/>
+
+                <!-- <button
+                class="nav-button"
+                @click="showNext"
+                :disabled="!canNavigateNext">
+                  Next
+                </button> -->
             </div>
         </div>
     </div>
@@ -32,7 +53,8 @@ const props = defineProps({
 const showPopup = ref(false);
 const lastImageUrl = ref(null);
 const matchingRecord = ref(null);
-// const gbifLink = computed(() => `https://www.gbif.org/species/${topPlantResult.value.gbif.id}`);
+const clickedFieldPath = ref('');
+const clickedFieldIndex = ref(-1);
 
 
 const imageUrl = computed(() => {
@@ -73,6 +95,16 @@ const imageUrl = computed(() => {
 watchEffect(() => {
   if (imageUrl.value && imageUrl.value !== lastImageUrl.value) {
     lastImageUrl.value = imageUrl.value;
+
+    const { matchingIndex, matchingPath } = constructClickedFieldKeyPath();
+    clickedFieldPath.value = matchingPath;
+    clickedFieldIndex.value = matchingIndex;
+
+    console.log("ImagePanel: matching path: ", matchingPath);
+    console.log("ImagePanel: matching index: ", matchingIndex);
+    console.log("ImagePanel: value of clicked path: ",
+      getValueByPath(props.queryResult[matchingIndex], matchingPath));
+
     if (props.queryResult) {
         matchingRecord.value = props.queryResult.find(
             record => record.picture &&
@@ -81,6 +113,132 @@ watchEffect(() => {
     }
   }
 });
+
+/**
+ * Gets the value of a field by its path.
+ *
+ * @params
+ *  - obj: The object to get the value from.
+ *  - path: The path to the value.
+ *
+ * @returns {Object} The value of the field.
+ */
+const getValueByPath = (obj, path) => {
+    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
+};
+
+/**
+ * Constructs the key path for the clicked field.
+ *
+ * If the clicked field is a "value" in the json, this function can find it's
+ * key name. It does this by traversing the DOM created by the json-viewer
+ * library.
+ *
+ * When the user directly clicks on a "key", the closest element with a jv-node
+ * is that key itself. So we don't find anything matching the value.
+ *
+ * The way to use this function is to only trigger it based on the imageURL
+ * regex, so we're only running it when the user clicks on an image. Otherwise
+ * it will end up matching the same key:value in the first field encountered.
+ *
+ * @params
+ *  - props.field: The field that the user clicked on.
+ *  - props.queryResult: The query result array.
+ *
+ * @returns {Object} An object with the matching index and path. Eg:
+ *  { matchingIndex: 0, matchingPath: 'picture.imageURL' }
+ *
+ * The index is used to continue the traversal of the queryResult array from
+ * that image onwards.
+ */
+function constructClickedFieldKeyPath() {
+  if (!props.field || !props.queryResult) return {
+    matchingIndex: -1, matchingPath: ''
+  };
+
+  const keyValue = props.field.textContent?.trim().replace(/['"]+/g, '') || '';
+  const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
+  const keyName = keyElement?.textContent?.trim().replace(/[:]+/g, '');
+  if (!keyName || !keyValue) {
+    console.log("ImagePanel: no key name/value found for the clicked field.");
+    return {
+      matchingIndex: -1, matchingPath: ''
+    };
+  }
+
+  console.log("ImagePanel: finding matching object for key: ", keyName, "value: ", keyValue);
+  const { matchingIndex, matchingPath } = findMatchingObject(
+    props.queryResult,
+    keyName,
+    keyValue
+  );
+
+  return { matchingIndex, matchingPath };
+}
+
+/**
+ * Finds the matching object in the given array.
+ *
+ * In order to do this it runs "traverse" on each object of the array, till it
+ * encounters the first one that has a matching key:value. This match occurs at
+ * the "leaf" level, eg:
+ *
+ * {
+ *   "key1": "value1",
+ *   "key2": {
+ *     "key3": "value3"
+ *   }
+ * }
+ *
+ * The match happens at key3:value3, but the path recorded is key2.key3.
+ * This is achieved by recursing on each "object" value encountered, and on
+ * each recursion resetting the current path to the current path + the key of
+ * that object.
+ *
+ * @params
+ *  - array: The queryResult array.
+ *  - keyName: The key name to search for.
+ *  - keyValue: The key value to search for.
+ *
+ * @returns {Object} An object with the matching index and path.
+ */
+function findMatchingObject(array, keyName, keyValue) {
+  if (!array || !keyName || !keyValue) return {
+    matchingIndex: -1, matchingPath: []
+  };
+
+  let matchingIndex = -1;
+  let matchingPath = '';
+
+  const traverse = (obj, path = []) => {
+    if (typeof obj !== 'object' || obj === null) return;
+
+    for (const [key, value] of Object.entries(obj)) {
+      const currentPath = [...path, key];
+
+      // Doesn't work for ints/lat/long etc.
+      if (key === keyName && value === keyValue) {
+        matchingPath = currentPath.join('.');
+        return true;
+      }
+
+      if (typeof value === 'object') {
+        if (traverse(value, currentPath)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < array.length; i++) {
+    if (traverse(array[i])) {
+      matchingIndex = i;
+      break;
+    }
+  }
+
+  return { matchingIndex, matchingPath };
+}
 
 function openPopup() {
     showPopup.value = true;
