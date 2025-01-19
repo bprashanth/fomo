@@ -53,12 +53,14 @@
 </template>
 
 <script setup>
-import { defineProps, ref, watchEffect } from 'vue';
+import { defineProps, ref, watchEffect, defineEmits } from 'vue';
 
 const props = defineProps({
     field: Object,
     queryResult: Array,
 });
+
+const emit = defineEmits(['note-update']);
 
 const showPopup = ref(false);
 // Record the path to the clicked field, for use in next/previous buttons.
@@ -70,7 +72,7 @@ const imageUrl = ref('');
 // Record the notes to display in the popup.
 const notes = ref([]);
 // Local copy of queryResult to store notes.
-// Set in watchEffect to props.queryResult.
+// Set in watchEffect, to props.queryResult.
 const localQueryResult = ref([]);
 
 /**
@@ -104,10 +106,21 @@ function saveNotes(index) {
   const record = localQueryResult.value[index];
   record.notes = [...notes.value];
   console.log("ImagePanel: saved notes: ", record.notes, "for index: ", index, "query result length: ", localQueryResult.value.length);
+
+  emit('note-update', {
+    notes: record.notes,
+    fieldKey: matchingFieldPath.value,
+    fieldValue: imageUrl.value
+  })
 }
 
 function loadNotes(index) {
   const record = localQueryResult.value[index];
+    if (!record) {
+    console.warn("ImagePanel: No record found at index:", index);
+    notes.value = [];
+    return;
+  }
   notes.value = record.notes || [];
   console.log("ImagePanel: loaded notes: ", notes.value, "for index: ", index, "query result length: ", localQueryResult.value.length);
 }
@@ -133,15 +146,20 @@ const updateImageUrl = (obj, path) => {
       'ImagePanel: content is not a string, skipping img update: ', content);
     return;
   }
-  const cleanContent = content.trim().replace(/['"]+/g, '');
-  if (cleanContent.includes('/data/') ||
-      /\.(jpg|jpeg|png|webp)$/i.test(cleanContent)) {
-      console.log("imageUrl computed: ", cleanContent);
-      imageUrl.value = cleanContent;
+  if (isImage(content)) {
+      console.log("imageUrl computed: ", content);
+      imageUrl.value = content;
   } else {
     console.warn(
-      "ImagePanel: content is not a valid image url: ", cleanContent);
+      "ImagePanel: content is not a valid image url: ", content);
   }
+}
+
+function isImage(textContent) {
+  if (!textContent) return false;
+  const cleanContent = textContent.trim().replace(/['"]+/g, '');
+  return (cleanContent.includes('/data/') ||
+    /\.(jpg|jpeg|png|webp)$/i.test(cleanContent));
 }
 
 // Why do we need watchEffect?
@@ -172,31 +190,48 @@ watchEffect(() => {
 
   console.log("ImagePanel: watchEffect triggered");
 
+  // We only update the imageUrl if the user clicks on an image. Even if the
+  // query results change, until the user clicks an image, the old image is
+  // shown.
   const keyValue = props.field.textContent?.trim().replace(/['"]+/g, '') || '';
-  const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
-  const keyName = keyElement?.textContent?.trim().replace(/[:]+/g, '');
+  if (isImage(keyValue)) {
+    console.log("ImagePanel: image found in the clicked field: ", keyValue);
+    const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
+    const keyName = keyElement?.textContent?.trim().replace(/[:]+/g, '');
+
+    const { matchingIndex, matchingPath } = constructClickedFieldKeyPath(
+      keyName, keyValue);
+
+    if (matchingIndex > -1 && matchingPath) {
+      console.log("ImagePanel: matchingIndex: ", matchingIndex, "matchingPath: ", matchingPath);
+      matchingRecordIndex.value = matchingIndex;
+      matchingFieldPath.value = matchingPath;
+      updateImageUrl(props.queryResult[matchingIndex], matchingPath);
+    } else {
+      console.warn("ImagePanel: no matching index/path found for the clicked field.");
+    }
+  }
+
+  console.log("ImagePanel: props.queryResult: ", props.queryResult);
+
+  for (const item of props.queryResult.slice(0, 10)) {
+    console.log("ImagePanel: item: ", item);
+    console.log("ImagePanel: item.notes: ", item.notes);
+  }
 
   // We are fine resetting localQueryResult on every props.queryResult change
   // because queryResult will change only when a different query is run in the
-  // schema panel. When that happens, merging it with localQueryResult won't
-  // make sense because the indices will change, so the notes won't match the
-  // images.
+  // schema panel. But we don't want to reset it when the user closes the popup
+  // and clicks on another field without changing the query. This is because
+  // we don't update the queryResults in the schemaPanel (where the user is
+  // clicking) with the notes, we straight update the editorData (i.e the core
+  // list from which query result is derived in the schema panel).
+  console.log("ImagePanel: queryResultsChanged, resetting localQueryResult");
   localQueryResult.value = props.queryResult.map(item => ({
     ...item,
-    notes: []
+    notes: Array.isArray(item?.notes) ? item.notes : []
   }));
-
-  const { matchingIndex, matchingPath } = constructClickedFieldKeyPath(
-    keyName, keyValue);
-
-  if (matchingIndex > -1 && matchingPath) {
-    console.log("ImagePanel: matchingIndex: ", matchingIndex, "matchingPath: ", matchingPath);
-    matchingRecordIndex.value = matchingIndex;
-    matchingFieldPath.value = matchingPath;
-    updateImageUrl(props.queryResult[matchingIndex], matchingPath);
-  } else {
-    console.warn("ImagePanel: no matching index/path found for the clicked field.");
-  }
+  notes.value = [];
 });
 
 /**
@@ -212,6 +247,9 @@ const getValueByPath = (obj, path) => {
     return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
 };
 
+/**
+ * Shows the previous image + notes overlay in the queryResult array.
+ */
 const showPrevious = () => {
   if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
 
@@ -222,6 +260,9 @@ const showPrevious = () => {
   loadNotes(matchingRecordIndex.value);
 }
 
+/**
+ * Shows the next image + notes overlay in the queryResult array.
+ */
 const showNext = () => {
   if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
 
@@ -348,11 +389,13 @@ function findMatchingObject(array, keyName, keyValue) {
 
 function openPopup() {
     showPopup.value = true;
+    loadNotes(matchingRecordIndex.value);
 }
 
 function closePopup() {
     showPopup.value = false;
     console.log("setting showPopup to: ", showPopup.value);
+    saveNotes(matchingRecordIndex.value);
 }
 
 </script>
