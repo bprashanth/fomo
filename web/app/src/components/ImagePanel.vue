@@ -22,19 +22,19 @@
     <!-- Popup modal -->
     <div v-if="showPopup" class="popup-overlay" @click.self="closePopup">
         <div class="popup-card">
-            <div class="popup-image-container">
+            <div class="popup-image-container" @click.stop="addNote">
 
               <!-- Image navigation buttons
                 TODO: These buttons are the same as the ones in App.vue.
                   We should combine them into a single component.
               -->
               <div class="editor-switcher">
-                <button @click="showPrevious">
+                <button @click.stop="showPrevious">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button @click="showNext">
+                <button @click.stop="showNext">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -42,6 +42,11 @@
               </div>
 
               <img :src="imageUrl" alt="Full Image" class="popup-image"/>
+
+              <!-- Render notes -->
+              <div v-for="(note, index) in notes" :key="index" class="note" :style="{ left: `${note.x}%`, top: `${note.y}%` }">
+                {{ note.text }}
+              </div>
             </div>
         </div>
     </div>
@@ -56,12 +61,40 @@ const props = defineProps({
 });
 
 const showPopup = ref(false);
-// Record the path to the clicked field, for use in the next/previous buttons.
+// Record the path to the clicked field, for use in next/previous buttons.
 const matchingFieldPath = ref('');
-// Record the index of the matching record, for use in the next/previous buttons.
+// Record the index of the matching record, for use in next/previous buttons.
 const matchingRecordIndex = ref(-1);
 // Record the imageUrl to display in the popup.
 const imageUrl = ref('');
+// Record the notes to display in the popup.
+const notes = ref([]);
+
+/**
+ * Add a note to the popup.
+ *
+ * This function uses relative offset coordinates to position the note.
+ * Therefore it's important that any element it's used on should be positioned
+ * absolutely. Moreover, justify-content: center; should NOT be used on the
+ * parent element, because it messes with the coordinates of the notes. Ideally
+ * the element should be width: 100% and height: 100% with object-fit: fill.
+ *
+ * @params
+ *  - event: The event that triggered the note addition.
+ */
+function addNote(event) {
+  // Ignore clicks outside the image.
+  const imageElement = event.currentTarget.querySelector('img');
+  if (!imageElement) return;
+
+  const x = ((event.offsetX / imageElement.offsetWidth) * 100);
+  const y = ((event.offsetY / imageElement.offsetHeight) * 100);
+
+  const text = prompt('Enter note text:');
+  if (text) {
+    notes.value.push({ x, y, text});
+  }
+}
 
 /**
  * Updates the imageUrl based on the clicked field.
@@ -334,11 +367,14 @@ img {
     box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5);
 }
 
+/*
+ * Do NOT use justify-content: center; here because it messes with the
+ * coordinates of the notes.
+ */
 .popup-image-container {
     position: relative;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
     max-width: 100%;
     height: 100%;
@@ -348,9 +384,9 @@ img {
 .popup-image {
     object-fit: contain;
     height: auto;
-    /* Why not use fit or cover?
+    /* Why not preserve aspect ratio?
      *
-     * fit: The image will be distorted. i.e if it's a rectangular image, and
+     * fill: The image will be distorted. i.e if it's a rectangular image, and
      * the container is square, the rectangle is stretched to fill the square.
      *
      * cover: the image will NOT be distored, but it may be zoomed in/cropped to
@@ -364,11 +400,12 @@ img {
      * And finally object-fit: scale-down will avoid scaling up like contain
      * does, it will only scale down if the image doesn't fit.
      *
-     * We want to use contain to avoid cropping the image.
+     * We want to use fill to make sure the overlay notes position correctly.
+     * This is the same reason for width == height == 100%.
      */
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
 }
 
 
@@ -495,6 +532,15 @@ img {
 
 .editor-switcher button:hover:not(:disabled) {
   color: #3388ff;
+}
+
+.note {
+  position: absolute;
+  background: rgba(255, 255, 0, 0.8);
+  color: black;
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 3px;
 }
 
 </style>
