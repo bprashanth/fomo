@@ -71,7 +71,15 @@ export default {
         }
     },
     mounted() {
+      // On the use of nextTick:
+      // Next tick forces onMounted to run after the DOM has updated (i.e in
+      // the next tick after the update). This is necessary because the map
+      // component is mounted before DOM is ready (onMounted is always called
+      // in parallel with DOM prep and this is usually fine, unless onMounted
+      // needs to access the DOM, like we need here for leaflet).
+      this.$nextTick(() => {
         this.initializeMap();
+      });
     },
     watch: {
         queryResult: {

@@ -343,7 +343,7 @@ const initializeWriterTools = () => {
   });
 };
 
-/* Capture the map as an image and the drawn layers as geoJson.
+/* Capture the map.
  *
  * - Show a progress bar.
  * - Capture the drawn layers as geoJson.

@@ -43,6 +43,7 @@
         @field-selected="handleField"
         @query-result-updated="handleQuery"
         :schema="schema"
+        :noteUpdate="noteUpdate"
         :data="data"/>
 
         <!-- Connections panel: displays the intersections of this study
@@ -55,7 +56,10 @@
 
     </div>
     <div class="quarter-panel">
-      <ImagePanel :field="field" :queryResult="fieldQueryResult"/>
+      <ImagePanel
+      :field="field"
+      :queryResult="queryResult"
+      @note-update="handleNoteUpdate"/>
     </div>
     <div class="quarter-panel">
       <SurveyResultPanel :queryResult="queryResult"/>
@@ -82,6 +86,13 @@ const queryResult = ref(null);
 // MapComponent.
 const hoveredBoundary = ref(null);
 
+// NoteUpdate is an object:
+// {
+//   notes: [notes added to image],
+//   fieldKey: 'key to image field',
+//   fieldValue: 'value of image field'
+// }
+const noteUpdate = ref(null);
 
 // Handle and process props from other components.
 // Eg the projects component opens up this page with each jobs schema and data.
@@ -100,6 +111,11 @@ defineProps({
     required: false
   }
 });
+
+const handleNoteUpdate = (newNoteUpdate) => {
+  console.log("DashboardComponent: handleNoteUpdate, newNoteUpdate: ", newNoteUpdate);
+  noteUpdate.value = newNoteUpdate;
+}
 
 const handleField = ({ field: selectedField, queryResult: result }) => {
   field.value = selectedField;

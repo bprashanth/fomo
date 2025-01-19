@@ -4,9 +4,13 @@
   :tabs -> TabComponent.vue -> @tabSelected -> :childFields
   :tabs -> TabComponent.vue -> @tabReordered -> :parentFields
   :parentFields, :childFields -> SchemaEditor.vue -> @joinFields
-  :fullData, :parentFieldsWithJoins -> JsonViewer.vue -> @joinedData
   :joinedData, :geoJsonData -> WriterMapComponent.vue -> @geoJsonData
-  :geoJsonData -> ReaderMapComponent.vue
+  :fullData, :parentTabSelected, :parentFieldsWithJoins -> DataViewer.vue
+    -> @joinedData, @data-viewer-open, @navigate-dashboard
+
+    The DataViewer component contains:
+      :fullData, :parentFieldsWithJoins -> JsonViewer.vue -> @joinedData
+      :geoJsonData -> ReaderMapComponent.vue
 
   * FileUpload.vue:
     - User uploads an excel file
@@ -32,6 +36,11 @@
     - Detects lat/lon columns from the joined
     - Displays lat/lon as markers on the map
 
+  * DataViewer.vue:
+    - Displays the joined data and the reader map
+    - Manages the transition states for the open/close of the data viewer
+    - Emits the joined data to the parent, as well as the open/close state
+
   @TODO:
   - Figure out consistent UI controls for Dashboard and Home. Right now the
     data viewer and file upload cause UI mis matches because of behavior
@@ -48,6 +57,14 @@
   - Move the data viewer into a component. It's only going to grow. Make the
     NEXT chevron button understand the right next page to go to via the click
     handler.
+
+  - Isolate the lat/lon detection logic into a separate component. It is
+    currently duplicated in the JsonViewer, WriterMapComponent and SchemaPanel (code cargo culted from the POC). When this is done, use FeatureCollection
+    to store the geoJson data in props, instead of an array of features. This
+    will need modifications to processing code in the JsonViewer.
+
+  - Handle situations where there are no lat/lon keys in the joined data.
+    Surface this to the user so they might join more tabs/fields.
 -->
 <template>
   <div id="app">
@@ -140,52 +157,18 @@
       - The data viewer panel shows up on all pages, so it's positioned outside
         the content div.
       - It's opening is conditioned on the DataViewerOpen flag, which is reset
-        every route exection.
+        every route exection (from within the DataViewer, before it emits
+        navigate-dashboard).
     -->
-    <div
-      class="data-viewer-wrapper"
-      :class="{ 'expanded': isDataViewerOpen }"
-      @transitionend="handleTransitionEnd"
-    >
-      <!-- A note on the JsonViewer:
-      Do not v-if the JsonViewer as it computes joins from data in the
-      drag/drop. v-show is fine, but feels "less responsive" (product).
-      -->
-      <JsonViewer
-        :fullData="fullData"
-        :parentTab="parentTabSelected"
-        :parentFieldsWithJoins="parentFieldsWithJoins"
-        @joinedData="handleJoinedData"
-      />
-      <ReaderMapComponent
-        v-if="isDataViewerOpen && isTransitionComplete && savedGeoJsonData.length"
-        :geoJsonData="savedGeoJsonData"
-        map-id="reader-map-1"
-      />
-      <div
-      class="dashboard-button-container"
-      v-if="isDataViewerOpen">
-        <button
-        class="dashboard-button"
-        @click="savedGeoJsonData.length && joinedData.length ? goToDashboard() : null"
-        :class="{ 'active': savedGeoJsonData.length && joinedData.length }"
-        >
-          NEXT
-          <!-- SVG Chevron for >> -->
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 6L14 12L8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M14 6L20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div
-      class="file-edge"
-      @click="toggleJsonViewer"
-      :class="{ 'expanded': isDataViewerOpen }"
-    >
-      <span class="file-label">data</span>
-    </div>
+    <DataViewer
+      :fullData="fullData"
+      :parentTabSelected="parentTabSelected"
+      :parentFieldsWithJoins="parentFieldsWithJoins"
+      :savedGeoJsonData="savedGeoJsonData"
+      @update-joined-data="handleJoinedData"
+      @navigate-dashboard="goToDashboard"
+      @data-viewer-open="handleDataViewerOpen"
+    />
   </div>
 </template>
 
@@ -194,9 +177,8 @@ import { ref } from 'vue';
 import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
-import JsonViewer from './components/JsonViewer.vue';
 import WriterMapComponent from './components/WriterMapComponent.vue';
-import ReaderMapComponent from './components/ReaderMapComponent.vue';
+import DataViewer from './components/DataViewer.vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
@@ -211,15 +193,13 @@ const parentFieldsWithJoins = ref([]);
 const joinedData = ref({});
 const savedGeoJsonData = ref([]);
 
-// Marks whether the data viewer panel has fully transitioned to open.
-const isTransitionComplete = ref(false);
-
 // Separator used to join the child tab name with the child field name.
 // TODO: What do we do if the child tab name contains a '.'?. This is a prop
 // right now, but we need to handle modifying it.
 const separator = ref('.');
 
 // Flag to determine if the side panel json viewer is open.
+// Setting it to true/false triggers the shrink/expand of the schema section.
 const isDataViewerOpen = ref(false);
 
 // The current editor mode - an enum of maps or schema.
@@ -257,28 +237,6 @@ const handleParentFieldsWithJoins = (fields) => {
   parentFieldsWithJoins.value = fields;
 }
 
-// Handles the json viewer components emitted data.
-const handleJoinedData = (data) => {
-  console.log("App: Joined data", data);
-  joinedData.value = data;
-};
-
-// Toggles the json viewer open/closed.
-const toggleJsonViewer = () => {
-  if (!isDataViewerOpen.value) {
-    isTransitionComplete.value = false;
-  }
-  isDataViewerOpen.value = !isDataViewerOpen.value;
-};
-
-// Records when the data viewer has fully transitioned to open. This is used
-// as a signal to trigger the map render.
-const handleTransitionEnd = (e) => {
-  if (e.propertyName === 'width' && isDataViewerOpen.value) {
-    isTransitionComplete.value = true;
-  }
-}
-
 /* Handles the geoJsonData emitted from the maps component.
  *
  * This function is only invoked by "writer" map components.
@@ -290,8 +248,21 @@ const handleGeoJsonData = (geoJsonData) => {
   savedGeoJsonData.value = geoJsonData;
 }
 
+// Handles the json viewer components emitted data.
+const handleJoinedData = (data) => {
+  console.log("App: Joined data", data);
+  joinedData.value = data;
+};
+
+// Handles the data viewer open/close event.
+// Setting this flag shrinks/expands the schema section.
+const handleDataViewerOpen = (open) => {
+  isDataViewerOpen.value = open;
+}
+
+// Navigates to the dashboard page.
+// Triggered when the "Next" button is clicked from the data viewer.
 const goToDashboard = () => {
-  toggleJsonViewer();
   router.push({
     name: 'Dashboard',
   });
@@ -332,6 +303,7 @@ const goToDashboard = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  font-family: Avenir, Helvetica, Arial, sans-serif;
 }
 
 .background {
@@ -415,111 +387,6 @@ const goToDashboard = () => {
 .editor-switcher button:hover:not(:disabled) {
   color: #3388ff;
 }
-
-.data-viewer-wrapper {
-  width: 15px;
-  background-color: #151515;
-  height: 100%;
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  right: 0;
-  top: 0;
-  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  transition: width 0.5s ease;
-  z-index: 5;
-  justify-content: center;
-}
-
-.data-viewer-wrapper.expanded {
-  width: 25%;
-}
-
-/* File Edge keeps up with the data-viewer-wrapper */
-.file-edge.expanded {
-  right: 25%;
-}
-
-.file-edge {
-  width: 20px;
-  max-width: 20px;
-  height: 60px;
-  background-color: #9c7b59;
-  border-radius: 5px 0 0 5px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  position: absolute;
-  right: 15px;
-  top: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: right 0.5s ease;
-}
-
-.file-label {
-  font-family: monospace;
-  font-size: 10px;
-  color: #151515;
-  background-color: #C6C7C9;
-  padding: 2px 6px;
-  border-radius: 3px;
-  transform: rotate(-90deg);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform-origin: left center;
-}
-
-/* "Next page" button styling */
-.dashboard-button-container {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.dashboard-button {
-  width: 40%;
-  background-color: #2c2c2c;
-  border: 1px solid #3d3d3d;
-  color: #808080;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  cursor: default;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-  opacity: 0.7;
-}
-
-.dashboard-button.active {
-  background-color: #2c2c3a;
-  border: 1px solid #3d3d4f;
-  color: #5FB1E0;
-  cursor: pointer;
-  opacity: 1;
-}
-
-.dashboard-button.active:hover {
-  background-color: #3d3d4f;
-  border-color: #4a4a5f;
-}
-
-.dashboard-button svg {
-  width: 1.2em;
-  height: 1.2em;
-  transition: transform 0.2s ease;
-}
-
-.dashboard-button:hover svg {
-  transform: translateX(6px);
-}
-/* End of "Next page" button styling */
 
 </style>
 

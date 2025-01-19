@@ -4,6 +4,7 @@
   - This entire component needs a thorough refactor.
   - Find a way to manage large query sizes in JsonViewer.
   - Display the restricted query results info.
+  - Merge duplication with ImagePanel (all the getValueByPath logic).
 -->
 
 <template>
@@ -23,7 +24,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, defineEmits, defineProps, computed } from 'vue';
+import { ref, onMounted, defineEmits, defineProps, computed, watch } from 'vue';
 import alasql from 'alasql';
 
 // https://www.npmjs.com/package/vue3-json-viewer
@@ -43,10 +44,76 @@ const props = defineProps({
   data: {
     type: Array,
     required: false
+  },
+  // NoteUpdate is an object:
+  // {
+  //   notes: [notes added to image],
+  //   fieldKey: 'key to image field',
+  //   fieldValue: 'value of image field'
+  // }
+  noteUpdate: {
+    type: Object,
+    required: false,
+    default: null
   }
 });
 console.log("Props from schema panel ", props);
 
+// Why do we need watch?
+// Notes are sent in from the ImagePanel, piped up to the DashboardComponent,
+// and then down to the SchemaPanel.
+// When the user annotates an image with notes, we update the editorData (which
+// is the local copy of the joinedData coming in from the App.vue) with notes.
+// This way when the user runs a new query, the notes are included in the query
+// result.
+watch(() => props.noteUpdate, (newNoteUpdate) => {
+  if (!newNoteUpdate || !editorData.value) return;
+
+  const { notes, fieldKey, fieldValue } = newNoteUpdate;
+
+  // Find the matching record in editorData
+  const recordIndex = editorData.value.findIndex(record => {
+    // Handle nested paths using reduce
+    const content = getValueByPath(record, fieldKey);
+    if (typeof content != 'string' || !content) {
+      return false;
+    }
+    if (content.trim().replace(/['"]+/g, '') === fieldValue) {
+        console.log("SchemaPanel: found matching record for notes: fieldKey: ", fieldKey, "fieldValue: ", fieldValue);
+        return true;
+    } else if (content.includes(fieldValue)) {
+        console.log("SchemaPanel: found similar record notes: fieldKey: ", fieldKey, "fieldValue: ", fieldValue);
+        return true;
+    }
+    return false;
+  });
+
+  if (recordIndex !== -1) {
+    // Create a new copy of the record to maintain reactivity
+    const updatedRecord = { ...editorData.value[recordIndex] };
+    updatedRecord.notes = notes;
+
+    // Update the editorData array
+    editorData.value = [
+      ...editorData.value.slice(0, recordIndex),
+      updatedRecord,
+      ...editorData.value.slice(recordIndex + 1)
+    ];
+  }
+}, { deep: true });
+
+/**
+ * Gets the value of a field by its path.
+ *
+ * @params
+ *  - obj: The object to get the value from.
+ *  - path: The path to the value.
+ *
+ * @returns {Object} The value of the field.
+ */
+const getValueByPath = (obj, path) => {
+    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
+};
 
 // Rather than import from assets like so:
 // we keep all the data files in public/data and fetch them in onMounted.
