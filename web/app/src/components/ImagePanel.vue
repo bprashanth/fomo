@@ -3,6 +3,7 @@
 @TODO:
   - This entire component needs a thorough refactor.
   - Decouple clicking logic from the DOM created by the json-viewer library.
+  - Combine the image-switcher here and the editor-switcher in App.vue.
 -->
 
 <template>
@@ -23,27 +24,31 @@
         <div class="popup-card">
             <div class="popup-image-container">
 
-                <!-- <button
-                class="nav-button"
-                @click="showPrevious" :disabled="!canNavigatePrevious">
-                  Previous
-                </button> -->
+              <!-- Image navigation buttons
+                TODO: These buttons are the same as the ones in App.vue.
+                  We should combine them into a single component.
+              -->
+              <div class="editor-switcher">
+                <button @click="showPrevious">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button @click="showNext">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
 
-                <img :src="imageUrl" alt="Full Image" class="popup-image"/>
-
-                <!-- <button
-                class="nav-button"
-                @click="showNext"
-                :disabled="!canNavigateNext">
-                  Next
-                </button> -->
+              <img :src="imageUrl" alt="Full Image" class="popup-image"/>
             </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { defineProps, ref, computed, watchEffect } from 'vue';
+import { defineProps, ref, watchEffect } from 'vue';
 
 const props = defineProps({
     field: Object,
@@ -51,28 +56,12 @@ const props = defineProps({
 });
 
 const showPopup = ref(false);
+// Record the path to the clicked field, for use in the next/previous buttons.
 const matchingFieldPath = ref('');
+// Record the index of the matching record, for use in the next/previous buttons.
 const matchingRecordIndex = ref(-1);
+// Record the imageUrl to display in the popup.
 const imageUrl = ref('');
-
-
-// const imageUrl = computed(() => {
-//     if (!props.field) return lastImageUrl.value;
-
-//     const textContent = props.field.textContent || '';
-//     const cleanContent = textContent.trim().replace(/['"]+/g, '');
-
-//     // Now test the cleaned content
-//     if (cleanContent.includes('/data/') ||
-//         /\.(jpg|jpeg|png|webp)$/i.test(cleanContent)) {
-//         console.log("imageUrl computed, returning: ", cleanContent);
-//         return cleanContent;
-//     }
-
-//     console.log("imageUrl computed failed, returning: ", lastImageUrl.value);
-//     return lastImageUrl.value;
-// })
-
 
 /**
  * Updates the imageUrl based on the clicked field.
@@ -82,20 +71,17 @@ const imageUrl = ref('');
  * image or a url to an image, it is ignored.
  *
  * @params
- *  - props.queryResult: The query result array.
- *  - matchingRecordIndex: The index of the matching record the user clicked on.
- *  - matchingFieldPath: The jsonpath path to the field the user clicked on.
+ *  - obj: The object to get the value from.
+ *  - path: The path to the value.
  */
-const updateImageUrl = () => {
-  if (props.queryResult.length === 0 || matchingRecordIndex.value === -1 || matchingFieldPath.value === '') return;
+const updateImageUrl = (obj, path) => {
+  if (!obj || !path) return;
 
-  const content = getValueByPath(
-    props.queryResult[matchingRecordIndex.value],
-      matchingFieldPath.value
-    );
-  console.log("ImagePanel: content url: ", content);
-  if (typeof content != 'string') {
-    console.warn('ImagePanel: content is not a string, skipping img update: ', content);
+  console.log("ImagePanel: updateImageUrl, path: ", path, "object: ", obj);
+  const content = getValueByPath(obj, path);
+  if (typeof content != 'string' || !content) {
+    console.warn(
+      'ImagePanel: content is not a string, skipping img update: ', content);
     return;
   }
   const cleanContent = content.trim().replace(/['"]+/g, '');
@@ -104,7 +90,8 @@ const updateImageUrl = () => {
       console.log("imageUrl computed: ", cleanContent);
       imageUrl.value = cleanContent;
   } else {
-    console.warn("ImagePanel: content is not a valid image url: ", cleanContent);
+    console.warn(
+      "ImagePanel: content is not a valid image url: ", cleanContent);
   }
 }
 
@@ -126,14 +113,19 @@ const updateImageUrl = () => {
 // matchingFieldPath values - which updateImageUrl knows how to handle.
 
 watchEffect(() => {
-  if (!props.field) return;
+  if (!props.field || !props.queryResult) return;
 
-  const { matchingIndex, matchingPath } = constructClickedFieldKeyPath();
+  const keyValue = props.field.textContent?.trim().replace(/['"]+/g, '') || '';
+  const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
+  const keyName = keyElement?.textContent?.trim().replace(/[:]+/g, '');
+
+  const { matchingIndex, matchingPath } = constructClickedFieldKeyPath(
+    keyName, keyValue);
   if (matchingIndex > -1 && matchingPath) {
     console.log("ImagePanel: matchingIndex: ", matchingIndex, "matchingPath: ", matchingPath);
     matchingRecordIndex.value = matchingIndex;
     matchingFieldPath.value = matchingPath;
-    updateImageUrl();
+    updateImageUrl(props.queryResult[matchingIndex], matchingPath);
   } else {
     console.warn("ImagePanel: no matching index/path found for the clicked field.");
   }
@@ -151,6 +143,22 @@ watchEffect(() => {
 const getValueByPath = (obj, path) => {
     return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
 };
+
+const showPrevious = () => {
+  if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
+
+  matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
+  updateImageUrl(
+    props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+}
+
+const showNext = () => {
+  if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
+
+  matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
+  updateImageUrl(
+    props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+}
 
 /**
  * Constructs the key path for the clicked field.
@@ -176,17 +184,7 @@ const getValueByPath = (obj, path) => {
  * The index is used to continue the traversal of the queryResult array from
  * that image onwards.
  */
-function constructClickedFieldKeyPath() {
-  if (!props.field || !props.queryResult) {
-    console.warn("ImagePanel: no field or queryResult found.");
-    return {
-      matchingIndex: -1, matchingPath: ''
-    }
-  }
-
-  const keyValue = props.field.textContent?.trim().replace(/['"]+/g, '') || '';
-  const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
-  const keyName = keyElement?.textContent?.trim().replace(/[:]+/g, '');
+function constructClickedFieldKeyPath(keyName, keyValue) {
   if (!keyName || !keyValue) {
     console.log("ImagePanel: no key name/value found for the clicked field.");
     return {
@@ -474,6 +472,29 @@ img {
 
 .ai-results-content span {
   color: #ada579;
+}
+
+.editor-switcher {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background-color: #151515;
+}
+
+.editor-switcher button {
+  border: none;
+  color: rgb(21, 21, 21, 0.5);
+  cursor: pointer;
+  position: relative;
+  background-color: transparent;
+  color: #1E628C;
+}
+
+.editor-switcher button:hover:not(:disabled) {
+  color: #3388ff;
 }
 
 </style>
