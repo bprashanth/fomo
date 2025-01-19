@@ -69,6 +69,9 @@ const matchingRecordIndex = ref(-1);
 const imageUrl = ref('');
 // Record the notes to display in the popup.
 const notes = ref([]);
+// Local copy of queryResult to store notes.
+// Set in watchEffect to props.queryResult.
+const localQueryResult = ref([]);
 
 /**
  * Add a note to the popup.
@@ -94,6 +97,19 @@ function addNote(event) {
   if (text) {
     notes.value.push({ x, y, text});
   }
+  console.log("ImagePanel: added notes: ", notes.value);
+}
+
+function saveNotes(index) {
+  const record = localQueryResult.value[index];
+  record.notes = [...notes.value];
+  console.log("ImagePanel: saved notes: ", record.notes, "for index: ", index, "query result length: ", localQueryResult.value.length);
+}
+
+function loadNotes(index) {
+  const record = localQueryResult.value[index];
+  notes.value = record.notes || [];
+  console.log("ImagePanel: loaded notes: ", notes.value, "for index: ", index, "query result length: ", localQueryResult.value.length);
 }
 
 /**
@@ -132,7 +148,7 @@ const updateImageUrl = (obj, path) => {
 //
 // We want to update the imageUrl whenever the user clicks on a field that
 // contains an image url. This comes in via props.field, which is literally
-// just the html span element (say) the user clicks on.
+// just the eg html span element the user clicks on.
 //
 // We use this span element to reverse lookup the key:value pair in the
 // props.queryResult array (see comments above those functions). These values
@@ -144,16 +160,35 @@ const updateImageUrl = (obj, path) => {
 // Currently, when the user clicks a button to move to the next/previous
 // picture, it updates the imageUrl based on the matchingRecordIndex and
 // matchingFieldPath values - which updateImageUrl knows how to handle.
+//
+// However, care must be taken. The watchEffect triggers everytime any variable
+// that is _read_ within it is written to outside. This is why loadNotes uses
+// matchingIndex (this doesn't create a dependency on matchingRecordIndex, and
+// hence doesn't trigger watchEffect when matchingRecordIndex changes outside).
+// This is also why we DO NOT need 2 separate watchEffects.
 
 watchEffect(() => {
   if (!props.field || !props.queryResult) return;
+
+  console.log("ImagePanel: watchEffect triggered");
 
   const keyValue = props.field.textContent?.trim().replace(/['"]+/g, '') || '';
   const keyElement = props.field.closest('.jv-node')?.querySelector('.jv-key');
   const keyName = keyElement?.textContent?.trim().replace(/[:]+/g, '');
 
+  // We are fine resetting localQueryResult on every props.queryResult change
+  // because queryResult will change only when a different query is run in the
+  // schema panel. When that happens, merging it with localQueryResult won't
+  // make sense because the indices will change, so the notes won't match the
+  // images.
+  localQueryResult.value = props.queryResult.map(item => ({
+    ...item,
+    notes: []
+  }));
+
   const { matchingIndex, matchingPath } = constructClickedFieldKeyPath(
     keyName, keyValue);
+
   if (matchingIndex > -1 && matchingPath) {
     console.log("ImagePanel: matchingIndex: ", matchingIndex, "matchingPath: ", matchingPath);
     matchingRecordIndex.value = matchingIndex;
@@ -180,17 +215,21 @@ const getValueByPath = (obj, path) => {
 const showPrevious = () => {
   if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
 
-  matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
+  saveNotes(matchingRecordIndex.value);
+  matchingRecordIndex.value = (matchingRecordIndex.value - 1) % props.queryResult.length;
   updateImageUrl(
     props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+  loadNotes(matchingRecordIndex.value);
 }
 
 const showNext = () => {
   if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
 
+  saveNotes(matchingRecordIndex.value);
   matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
   updateImageUrl(
     props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+  loadNotes(matchingRecordIndex.value);
 }
 
 /**
@@ -536,7 +575,7 @@ img {
 
 .note {
   position: absolute;
-  background: rgba(255, 255, 0, 0.8);
+  background: rgb(255, 255, 0);
   color: black;
   font-size: 12px;
   transform: translate(-50%, -50%);
