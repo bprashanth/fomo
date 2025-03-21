@@ -79,7 +79,7 @@ Manages all elements in the data viewer side panel.
 </template>
 
 <script setup>
-import { ref, defineEmits, defineProps } from 'vue';
+import { ref, defineEmits, defineProps, defineExpose } from 'vue';
 import JsonViewer from './JsonViewer.vue';
 import ReaderMapComponent from './ReaderMapComponent.vue';
 
@@ -137,6 +137,13 @@ const goToDashboard = () => {
   toggleViewer(null);
   emit('navigate-dashboard');
 }
+
+// Keep defineExpose at the end, vue expects us to define the function fist
+// before exposing it since the parent could call it in the intrim.
+defineExpose({
+  toggleViewer
+});
+
 </script>
 
 <style scoped>

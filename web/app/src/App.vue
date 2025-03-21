@@ -159,8 +159,12 @@
       - It's opening is conditioned on the DataViewerOpen flag, which is reset
         every route exection (from within the DataViewer, before it emits
         navigate-dashboard).
+      - The data viewer ref is used to toggle it open/close from this
+        component. We do this when there is only one tab, to avoid user
+        confusion.
     -->
     <DataViewer
+      ref="dataViewerRef"
       :fullData="fullData"
       :parentTabSelected="parentTabSelected"
       :parentFieldsWithJoins="parentFieldsWithJoins"
@@ -205,10 +209,34 @@ const isDataViewerOpen = ref(false);
 // The current editor mode - an enum of maps or schema.
 const currentEditor = ref('schema');
 
+// Reference to the data viewer component, used to toggle the data viewer
+// open/close.
+const dataViewerRef = ref(null);
+
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
   tabs.value = parsedData.headerData;
   fullData.value = parsedData.fullData;
+
+  // When there is only one tab, take the following actions:
+  // 1. Auto select the tab (no joins necessary)
+  // 2. Set the current editor to maps (user sees lat/long directly)
+  // 3. Open the data viewer (user sees data structure)
+  // TODO(prashanth@): should we auto select the right most tab in all cases?
+  const tabNames = Object.keys(tabs.value);
+  if (tabNames.length === 1) {
+    const tabName = tabNames[0];
+    console.log("App: Auto selecting tab", tabName);
+    handleParentTabSelected({
+      tab: tabName,
+      columns: tabs.value[tabName]
+    });
+    currentEditor.value = 'maps';
+    // Reposition the maps schema editor to allow space for the data viewer.
+    isDataViewerOpen.value = true;
+    // Open the data viewer.
+    dataViewerRef.value?.toggleViewer('data');
+  }
 }
 
 // Looks up the column names of the parent tab and passes it to the

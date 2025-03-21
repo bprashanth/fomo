@@ -126,17 +126,12 @@ const handleMergedCells = (sheet, sheetJson, headers) => {
     const headerKey = headers[colIndex];
     if (!headerKey) return;
 
-    console.log('Looking for merge value in row ', startRow, ' for column ', colIndex, ' with header ', headerKey, ' taken from header details array ', headers);
-    console.log('Using these values in sheetJson[startRow]: ', sheetJson[startRow], ' full sheetJson (0-5): ', sheetJson.slice(0, 5));
-
     const mergedValue = sheetJson[startRow]?.[headerKey];
     if (mergedValue == undefined) {
       console.log(
         'Merged value for row: ', startRow, 'col: ', colIndex, ' is undefined,  nothing to merge; Row:', sheetJson[startRow]);
       return;
     }
-
-    console.log('Inserting merged value ', mergedValue, ' from row ', startRow, ' till row ', endRow, ' in column ', headerKey);
     for (let r = startRow + 1; r <= endRow; r++) {
       if (sheetJson[r]) {
         sheetJson[r][headerKey] = mergedValue;
