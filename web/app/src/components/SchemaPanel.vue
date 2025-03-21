@@ -219,6 +219,9 @@ function runQuery() {
                 queryResult.value = uniqueParents;
             }
 
+        } else if (query.value.includes('notes->text')) {
+            console.log('Notes query: ', query.value);
+            queryResult.value = queryNotes(query.value);
         } else {
             console.log('Running normal AlaSQL query');
             result = alasql(query.value, [editorData.value]);
@@ -233,6 +236,30 @@ function runQuery() {
         console.error('Query Error:', error);
         queryResult.value = { error: 'Invalid Query' };
     }
+}
+
+
+const queryNotes = (query) => {
+  console.log('Querying notes: ', query);
+
+  const regexMatch = query.match(/notes->text\s*=\s*["'](.+?)["']/i);
+  if (!regexMatch) {
+    console.warning('Invalid notes query: ', query);
+    return [];
+  }
+
+  // Get the pattern and convert SQL wildcards (*) to regex wildcards (.*)
+  let pattern = regexMatch[1].replace(/\*/g, '.*');
+  const regex = new RegExp(pattern, 'i');
+
+  // Filter the editorData to find records with matching notes
+  return editorData.value.filter(record => {
+    if (!record.notes || !Array.isArray(record.notes)) {
+      return false;
+    }
+    // Check if any note's text matches the regex
+    return record.notes.some(note => regex.test(note.text));
+  });
 }
 
 
