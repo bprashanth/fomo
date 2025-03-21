@@ -57,9 +57,11 @@ const handleFileUpload = (event) => {
         const fullData = {};
         const headerData = {};
 
+        console.log('workbook.SheetNames', workbook.SheetNames);
+
         workbook.SheetNames.forEach((sheetName) => {
           const sheet = workbook.Sheets[sheetName];
-          // Get data with header: 1 to get array format first
+          // Get data with "header: 1" to get array format first
           const rawSheetJson = XLSX.utils.sheet_to_json(sheet, {header: 1});
 
           // Transform the data into objects
@@ -71,9 +73,8 @@ const handleFileUpload = (event) => {
             }, {});
           });
 
-          // Store full dataset
+          handleMergedCells(sheet, sheetJson, headers);
           fullData[sheetName] = sheetJson;
-          // Store just the headers (first row)
           headerData[sheetName] = headers;
         })
 
@@ -81,6 +82,62 @@ const handleFileUpload = (event) => {
         emit('fileParsed', { fullData, headerData });
     };
     reader.readAsArrayBuffer(file);
+};
+
+/**
+ * handleMergedCells handles cells that are merged across multiple rows.
+ *
+ * Currently this function only handles merges along the Y axis, i.e. merges
+ * that span multiple rows. Merges that span multiple columns are not handled.
+ *
+ * @params
+ * - sheet: The sheet object from the workbook
+ * - sheetJson: The sheet object in json format, WITHOUT the header row
+ * - headers: The headers of the sheet
+ *
+ * @returns: None
+ *
+ * The sheetJson is modified in place to handle merged cells.
+ */
+const handleMergedCells = (sheet, sheetJson, headers) => {
+
+  // Sheet merges shows the first and last row, column of a merged cell. Eg:
+  // {s: {r: 1, c: 1}, e: {r: 2, c: 1}}
+  // This means that the cell at row 1, column 1 is merged with the cell at
+  // 2, column 1, i.e
+  // name | age
+  //    A | 1
+  //      | 2
+  // For such a table, we want the json
+  // {name: 'A', age: '1'}
+  // {name: 'A', age: '2'}
+  if (!sheet['!merges']) {
+    console.log('No merged cells found');
+    return;
+  }
+
+  sheet['!merges'].forEach(({ s, e }) => {
+    const colIndex = s.c;
+    // Why do we subtract 1 from the row indices?
+    // sheetJson is offset by 1 row because we remove the header row. However sheet, from which we get the merges, is not offset. So the row indices
+    const startRow = s.r - 1;
+    const endRow = e.r - 1;
+
+    const headerKey = headers[colIndex];
+    if (!headerKey) return;
+
+    const mergedValue = sheetJson[startRow]?.[headerKey];
+    if (mergedValue == undefined) {
+      console.log(
+        'Merged value for row: ', startRow, 'col: ', colIndex, ' is undefined,  nothing to merge; Row:', sheetJson[startRow]);
+      return;
+    }
+    for (let r = startRow + 1; r <= endRow; r++) {
+      if (sheetJson[r]) {
+        sheetJson[r][headerKey] = mergedValue;
+      }
+    }
+  });
 };
 
 </script>

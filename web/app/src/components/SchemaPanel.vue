@@ -219,8 +219,29 @@ function runQuery() {
                 queryResult.value = uniqueParents;
             }
 
+        } else if (query.value.includes('notes->text')) {
+            console.log('Notes query: ', query.value);
+
+            // Split the query on AND to separate notes query from additional
+            // conditions. Don't toLower this query, as the params are case
+            // sensitive.
+            // TODO(prashanth@): check if AND is included in the query.
+            const [notesQuery, ...additionalClauses] = query.value.split(' and ');
+
+            // First get results from notes query
+            let results = queryNotes(notesQuery);
+
+            // If there are additional clauses, run them through alasql
+            if (additionalClauses.length > 0) {
+              // Reconstruct the remaining query
+              const conditions = additionalClauses.join(' AND ').trim();
+              results = alasql("select * from ? where " + conditions, [results]);
+              console.log('Results after additional filters: ', conditions, ' are ', results);
+            }
+
+            queryResult.value = results;
         } else {
-            console.log('Running normal AlaSQL query');
+            console.log('Running normal AlaSQL query: ', query.value);
             result = alasql(query.value, [editorData.value]);
             queryResult.value = result;
         }
@@ -233,6 +254,30 @@ function runQuery() {
         console.error('Query Error:', error);
         queryResult.value = { error: 'Invalid Query' };
     }
+}
+
+
+const queryNotes = (query) => {
+  console.log('Querying notes: ', query);
+
+  const regexMatch = query.match(/notes->text\s*=\s*["'](.+?)["']/i);
+  if (!regexMatch) {
+    console.warning('Invalid notes query: ', query);
+    return [];
+  }
+
+  // Get the pattern and convert SQL wildcards (*) to regex wildcards (.*)
+  let pattern = regexMatch[1].replace(/\*/g, '.*');
+  const regex = new RegExp(pattern, 'i');
+
+  // Filter the editorData to find records with matching notes
+  return editorData.value.filter(record => {
+    if (!record.notes || !Array.isArray(record.notes)) {
+      return false;
+    }
+    // Check if any note's text matches the regex
+    return record.notes.some(note => regex.test(note.text));
+  });
 }
 
 

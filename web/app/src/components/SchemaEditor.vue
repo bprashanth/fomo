@@ -185,7 +185,6 @@ const handleDrop = (parentFieldName) => {
   padding: 0px 20px 0 20px;
   width: 100%;
   max-width: 800px;
-
 }
 
 .fields-container {
