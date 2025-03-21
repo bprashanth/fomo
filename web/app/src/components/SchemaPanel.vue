@@ -221,9 +221,27 @@ function runQuery() {
 
         } else if (query.value.includes('notes->text')) {
             console.log('Notes query: ', query.value);
-            queryResult.value = queryNotes(query.value);
+
+            // Split the query on AND to separate notes query from additional
+            // conditions. Don't toLower this query, as the params are case
+            // sensitive.
+            // TODO(prashanth@): check if AND is included in the query.
+            const [notesQuery, ...additionalClauses] = query.value.split(' and ');
+
+            // First get results from notes query
+            let results = queryNotes(notesQuery);
+
+            // If there are additional clauses, run them through alasql
+            if (additionalClauses.length > 0) {
+              // Reconstruct the remaining query
+              const conditions = additionalClauses.join(' AND ').trim();
+              results = alasql("select * from ? where " + conditions, [results]);
+              console.log('Results after additional filters: ', conditions, ' are ', results);
+            }
+
+            queryResult.value = results;
         } else {
-            console.log('Running normal AlaSQL query');
+            console.log('Running normal AlaSQL query: ', query.value);
             result = alasql(query.value, [editorData.value]);
             queryResult.value = result;
         }
