@@ -89,7 +89,7 @@
     -->
     <div class="content" :class="{
       'dragging': isDataViewerOpen && $route.name != 'Dashboard',
-      'with-padding': $route.name != 'Dashboard'
+      'with-padding': $route.name != 'Dashboard' && $route.name != 'Login'
       }">
       <router-view
         :schema="joinedData ? {schema: joinedData[0]} : { schema: {} }"
@@ -98,7 +98,12 @@
         v-if="$route.name === 'Dashboard'"
       ></router-view>
 
-      <!-- Only show main content when not on dashboard -->
+      <!-- TODO(prashanth@): issues/16: refactor into HomeView.vue -->
+      <router-view
+        v-if="$route.name === 'Login'"
+      ></router-view>
+
+      <!-- Only show main content when logged in and not on dashboard -->
       <template v-else>
         <FileUpload @fileParsed="handleFileParsed" />
         <TabComponent
