@@ -100,7 +100,7 @@
 
       <!-- TODO(prashanth@): issues/16: refactor into HomeView.vue -->
       <router-view
-        v-if="$route.name === 'Login'"
+        v-else-if="$route.name === 'Login'"
       ></router-view>
 
       <!-- Only show main content when logged in and not on dashboard -->
