@@ -75,6 +75,12 @@ const notes = ref([]);
 // Set in watchEffect, to props.queryResult.
 const localQueryResult = ref([]);
 
+// New variables for tile navigation
+const isMapWithTiles = ref(false);
+const currentTileIndex = ref(0);
+const tilesPath = ref('');
+const tileUrlField = ref('tile_url');
+
 /**
  * Add a note to the popup.
  *
@@ -126,20 +132,147 @@ function loadNotes(index) {
 }
 
 /**
- * Updates the imageUrl based on the clicked field.
+ * Detects if the current object is a map with tiles.
  *
- * The matchingRecord/FieldPath are used to retrieve the value of the field
- * within props.queryResult. If this field is not a path to either a local
- * image or a url to an image, it is ignored.
+ * The logic is as follows:
+ *  - Check if the object has a key that includes "map" or "preview".
+ *  - If it does, check if any key has "tiles" in it.
+ *  - If it does, check if the value is an array of objects with any key
+ *     containing "url" in it.
+ *  - If all these conditions are met, return the object with the following
+ *     properties:
+ *     - isMap: true
+ *     - tilesPath: the path to the tiles array
+ *     - tileUrlField: the field containing the tile url
+ *  - Otherwise, return an object with isMap set to false.
+ *
+ * @param {Object} obj - The object to check
+ * @returns {Object} Object containing isMap, tilesPath, and tileUrlField
+ */
+function detectMapWithTiles(obj) {
+  if (!obj || typeof obj !== 'object') {
+    return { isMap: false, tilesPath: '', tileUrlField: '' };
+  }
+
+  // Check if object has map-related keys
+  const hasMapKey = Object.keys(obj).some(key =>
+    key.toLowerCase().includes('map') || key.toLowerCase().includes('preview')
+  );
+
+  if (!hasMapKey) {
+    console.log("ImagePanel: tiles: no map-related keys found for object: ", obj);
+    return { isMap: false, tilesPath: '', tileUrlField: '' };
+  }
+
+  // Look for tiles in the object
+  for (const [key, value] of Object.entries(obj)) {
+    if (key.toLowerCase().includes('tiles') && Array.isArray(value)) {
+      console.log("ImagePanel: tiles: found tiles array: ", key, value);
+      // Check if the array contains objects with tile_url
+      if (value.length > 0 && typeof value[0] === 'object') {
+        const firstTile = value[0];
+        const tileUrlKey = Object.keys(firstTile).find(k =>
+          k.toLowerCase().includes('url')
+        );
+
+        if (tileUrlKey) {
+          console.log("ImagePanel: SUCCESS tiles: found tile url key: ", tileUrlKey);
+          return {
+            isMap: true,
+            tilesPath: key,
+            tileUrlField: tileUrlKey
+          };
+        }
+      }
+    }
+  }
+  console.log("ImagePanel: no tiles found for object: ", obj);
+
+  return { isMap: false, tilesPath: '', tileUrlField: '' };
+}
+
+/**
+ * Gets the tile URL at the specified index from the current object.
+ *
+ * Retrieves the tiles sub-object from the current object, and then the tile
+ * url from the tile sub-object using the tileIndex field.
+ *
+ * @param {number} tileIndex - The index of the tile to get
+ * @returns {string|null} The tile URL or null if not found
+ */
+function getTileUrl(tileIndex) {
+  if (!isMapWithTiles.value || matchingRecordIndex.value === -1) {
+    return null;
+  }
+
+  const currentRecord = props.queryResult[matchingRecordIndex.value];
+  const tiles = getValueByPath(currentRecord, tilesPath.value);
+  console.log("ImagePanel: tiles: looking for tile url at index: ", tileIndex, "tile path: ", tilesPath.value, " got tiles: ", tiles);
+
+  if (!Array.isArray(tiles) || tileIndex < 0 || tileIndex >= tiles.length) {
+    console.log("ImagePanel: tiles: no tiles found at index: ", tileIndex, "tile path: ", tilesPath.value, " got tiles: ", tiles);
+    return null;
+  }
+
+  const tile = tiles[tileIndex];
+  return tile[tileUrlField.value];
+}
+
+/**
+ * Gets the value of a field by its path.
+ *
+ * This function first assumes the path is a literal key. If that fails, it
+ * tries dot notation. Eg:
+ *
+ * path: foo.bar.baz
+ * first checks for {foo.bar.baz: 0}
+ * and then for {foo: {bar: {baz: 0}}}
  *
  * @params
  *  - obj: The object to get the value from.
  *  - path: The path to the value.
+ *
+ * @returns {Object} The value of the field.
+ */
+const getValueByPath = (obj, path) => {
+    // First try literal key
+    if (obj && obj[path] !== undefined) {
+        return obj[path];
+    }
+
+    // Then try dot notation
+    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
+};
+
+/**
+ * Updates the imageUrl based on the clicked field or tile navigation.
+ *
+ * @param {Object} obj - The object to get the value from.
+ * @param {string} path - The path to the value.
  */
 const updateImageUrl = (obj, path) => {
   if (!obj || !path) return;
 
   console.log("ImagePanel: updateImageUrl, path: ", path, "object: ", obj);
+
+  // Chsiteseck if this is a map with tiles
+  const mapInfo = detectMapWithTiles(obj);
+  isMapWithTiles.value = mapInfo.isMap;
+  tilesPath.value = mapInfo.tilesPath;
+  tileUrlField.value = mapInfo.tileUrlField;
+
+  if (isMapWithTiles.value && showPopup.value) {
+    // In popup mode for maps with tiles, show the first tile by default
+    const tileUrl = getTileUrl(0);
+    if (tileUrl && isImage(tileUrl)) {
+      console.log("ImagePanel: showing tile URL: ", tileUrl);
+      imageUrl.value = tileUrl;
+      currentTileIndex.value = 0;
+      return;
+    }
+  }
+
+  // Fall back to normal behavior
   const content = getValueByPath(obj, path);
   if (typeof content != 'string' || !content) {
     console.warn(
@@ -238,42 +371,65 @@ watchEffect(() => {
 });
 
 /**
- * Gets the value of a field by its path.
- *
- * @params
- *  - obj: The object to get the value from.
- *  - path: The path to the value.
- *
- * @returns {Object} The value of the field.
- */
-const getValueByPath = (obj, path) => {
-    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
-};
-
-/**
- * Shows the previous image + notes overlay in the queryResult array.
+ * Shows the previous image or tile.
  */
 const showPrevious = () => {
   if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
 
   saveNotes(matchingRecordIndex.value);
-  matchingRecordIndex.value = (matchingRecordIndex.value - 1) % props.queryResult.length;
-  updateImageUrl(
-    props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
-  loadNotes(matchingRecordIndex.value);
+
+  if (isMapWithTiles.value && showPopup.value) {
+    // Navigate through tiles within the same object
+    const currentRecord = props.queryResult[matchingRecordIndex.value];
+    const tiles = getValueByPath(currentRecord, tilesPath.value);
+
+    if (Array.isArray(tiles) && tiles.length > 0) {
+      currentTileIndex.value = (currentTileIndex.value - 1 + tiles.length) % tiles.length;
+      const tileUrl = getTileUrl(currentTileIndex.value);
+      if (tileUrl && isImage(tileUrl)) {
+        imageUrl.value = tileUrl;
+        loadNotes(matchingRecordIndex.value);
+        return;
+      }
+    }
+  } else {
+    // Normal navigation between objects
+    matchingRecordIndex.value = (matchingRecordIndex.value - 1 + props.queryResult.length) % props.queryResult.length;
+    updateImageUrl(
+      props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+    loadNotes(matchingRecordIndex.value);
+  }
 }
 
 /**
- * Shows the next image + notes overlay in the queryResult array.
+ * Shows the next image or tile.
  */
 const showNext = () => {
   if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
 
   saveNotes(matchingRecordIndex.value);
-  matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
-  updateImageUrl(
-    props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
-  loadNotes(matchingRecordIndex.value);
+
+  if (isMapWithTiles.value && showPopup.value) {
+    // Navigate through tiles within the same object
+    const currentRecord = props.queryResult[matchingRecordIndex.value];
+    const tiles = getValueByPath(currentRecord, tilesPath.value);
+
+    if (Array.isArray(tiles) && tiles.length > 0) {
+      currentTileIndex.value = (currentTileIndex.value + 1) % tiles.length;
+      const tileUrl = getTileUrl(currentTileIndex.value);
+      if (tileUrl && isImage(tileUrl)) {
+        imageUrl.value = tileUrl;
+        loadNotes(matchingRecordIndex.value);
+        return;
+      }
+    }
+  } else {
+    // Normal navigation between objects
+    matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
+    updateImageUrl(
+      props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+    loadNotes(matchingRecordIndex.value);
+  }
 }
 
 /**
@@ -392,6 +548,19 @@ function findMatchingObject(array, keyName, keyValue) {
 
 function openPopup() {
     showPopup.value = true;
+
+    // If this is a map with tiles, show the first tile instead of the base map
+    if (isMapWithTiles.value) {
+      console.log("ImagePanel: is a map with tiles, showing first tile");
+      const tileUrl = getTileUrl(0);
+      if (tileUrl && isImage(tileUrl)) {
+        imageUrl.value = tileUrl;
+        currentTileIndex.value = 0;
+      }
+    } else {
+      console.log("ImagePanel: not a map with tiles, showing base map");
+    }
+
     loadNotes(matchingRecordIndex.value);
 }
 
@@ -399,6 +568,11 @@ function closePopup() {
     showPopup.value = false;
     console.log("setting showPopup to: ", showPopup.value);
     saveNotes(matchingRecordIndex.value);
+
+    // Reset tile navigation state when closing popup
+    if (isMapWithTiles.value) {
+      currentTileIndex.value = 0;
+    }
 }
 
 </script>
