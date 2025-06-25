@@ -158,8 +158,11 @@ const updateImageUrl = (obj, path) => {
 function isImage(textContent) {
   if (!textContent) return false;
   const cleanContent = textContent.trim().replace(/['"]+/g, '');
+
+  const urlWithoutParams = cleanContent.split('?')[0];
+
   return (cleanContent.includes('/data/') ||
-    /\.(jpg|jpeg|png|webp)$/i.test(cleanContent));
+    /\.(jpg|jpeg|png|webp)$/i.test(urlWithoutParams));
 }
 
 // Why do we need watchEffect?
