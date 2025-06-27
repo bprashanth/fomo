@@ -28,7 +28,7 @@
       <img src="@/assets/logos/default.webp" alt="logo">
     </div>
     <label for="file-input" class="upload-label">
-      <span class="file-placeholder">Choose an excel dataset...</span>
+      <span class="file-placeholder">Upload a dataset...</span>
       <svg class="upload-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M11 15V3H13V15H11ZM12 19L7 14H17L12 19Z" fill="currentColor"/>
       </svg>
