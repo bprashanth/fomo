@@ -31,6 +31,8 @@ import alasql from 'alasql';
 import { JsonViewer } from 'vue3-json-viewer';
 import "vue3-json-viewer/dist/index.css";
 
+import { resolveNaturalLanguageQuery } from '../services/queryTemplateService.js';
+
 // const schemaData = schemaDefinitions;
 const query = ref('');
 const editorData = ref(null);
@@ -241,8 +243,16 @@ function runQuery() {
 
             queryResult.value = results;
         } else {
-            console.log('Running normal AlaSQL query: ', query.value);
-            result = alasql(query.value, [editorData.value]);
+            let finalQuery = query.value;
+            const resolved = resolveNaturalLanguageQuery(
+              query.value, editorData.value);
+            if (resolved) {
+              console.log('Resolved natural query to SQL: ', resolved);
+              finalQuery = resolved;
+            }
+
+            console.log('Running normal AlaSQL query: ', finalQuery);
+            result = alasql(finalQuery, [editorData.value]);
             queryResult.value = result;
         }
 
@@ -252,7 +262,7 @@ function runQuery() {
         }
     } catch (error) {
         console.error('Query Error:', error);
-        queryResult.value = { error: 'Invalid Query' };
+        queryResult.value = { error: 'Invalid Query: ' + error.message };
     }
 }
 
