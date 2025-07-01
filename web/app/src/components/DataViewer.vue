@@ -56,7 +56,7 @@ Manages all elements in the data viewer side panel.
         </div>
       </div>
       <div class="active-viewer" v-show="activeViewer === 'insights'">
-        <h1>Insights</h1>
+        <QueryTemplatePanel @template-selected="handleTemplateSelected" />
       </div>
     </div>
 
@@ -82,6 +82,7 @@ Manages all elements in the data viewer side panel.
 import { ref, defineEmits, defineProps, defineExpose } from 'vue';
 import JsonViewer from './JsonViewer.vue';
 import ReaderMapComponent from './ReaderMapComponent.vue';
+import QueryTemplatePanel from './QueryTemplatePanel.vue';
 
 const isDataViewerOpen = ref(false);
 const isTransitionComplete = ref(false);
@@ -136,6 +137,13 @@ const toggleViewer = (edgeId) => {
 const goToDashboard = () => {
   toggleViewer(null);
   emit('navigate-dashboard');
+}
+
+const handleTemplateSelected = (template) => {
+  window.dispatchEvent(new CustomEvent(
+    'template-selected', {
+    detail: { query: template },
+  }));
 }
 
 // Keep defineExpose at the end, vue expects us to define the function fist
