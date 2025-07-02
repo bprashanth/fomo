@@ -43,7 +43,7 @@ function resolveNaturalLanguageQuery(userQuery, data) {
     {
       pattern: /create a timelapse of images in site (.+)/i,
       extract: (match) => match[1],
-      sqlTemplate: "SELECT image_url, timestamp FROM ? WHERE <key> = '<value>' ORDER BY timestamp"
+      sqlTemplate: "SELECT * FROM ? WHERE <key> = '<value>' ORDER BY date"
     }
   ];
 
