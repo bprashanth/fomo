@@ -182,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
@@ -217,6 +217,15 @@ const currentEditor = ref('schema');
 // Reference to the data viewer component, used to toggle the data viewer
 // open/close.
 const dataViewerRef = ref(null);
+
+onMounted(() => {
+  console.log('App mounted');
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+});
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -299,6 +308,22 @@ const goToDashboard = () => {
   router.push({
     name: 'Dashboard',
   });
+}
+
+/* Handles the keyboard shortcuts.
+ *
+ * Summary of shortcuts:
+ * - Ctrl/Cmd + L: Toggles the data viewer open/closed.
+ */
+const handleKeyDown = (e) => {
+  const isCtrlOrCmd = e.metaKey || e.ctrlKey;
+  if (isCtrlOrCmd && e.key.toLowerCase() === 'l') {
+    e.preventDefault();
+    dataViewerRef.value?.toggleViewer(
+      isDataViewerOpen.value ? null :
+        router.currentRoute.value.name === 'Dashboard' ? 'insights' : 'data'
+    );
+  }
 }
 </script>
 

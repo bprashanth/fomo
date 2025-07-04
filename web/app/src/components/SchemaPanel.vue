@@ -24,12 +24,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, defineEmits, defineProps, computed, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, defineEmits, defineProps, computed, watch } from 'vue';
 import alasql from 'alasql';
 
 // https://www.npmjs.com/package/vue3-json-viewer
 import { JsonViewer } from 'vue3-json-viewer';
 import "vue3-json-viewer/dist/index.css";
+
+import { resolveNaturalLanguageQuery } from '../services/queryTemplateService.js';
 
 // const schemaData = schemaDefinitions;
 const query = ref('');
@@ -132,14 +134,21 @@ const limitedQueryResult = computed(() => {
     return queryResult.value;
 });
 
-
 onMounted(async () => {
     editorData.value = props.data;
     schemaDefinitions.value = props.schema;
     queryResult.value = schemaDefinitions.value;
 
+    // Handle the query template selected event from DataViewer
+    window.addEventListener('template-selected', handleTemplateSelected);
+
     console.log("SchemaPanel: onMounted, editorData: ", editorData.value, "schemaDefinitions: ", schemaDefinitions.value);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('template-selected', handleTemplateSelected);
+});
+
 
 function extractSensorValues(obj, pathParts, parentIndex) {
   /**
@@ -241,8 +250,16 @@ function runQuery() {
 
             queryResult.value = results;
         } else {
-            console.log('Running normal AlaSQL query: ', query.value);
-            result = alasql(query.value, [editorData.value]);
+            let finalQuery = query.value;
+            const resolved = resolveNaturalLanguageQuery(
+              query.value, editorData.value);
+            if (resolved) {
+              console.log('Resolved natural query to SQL: ', resolved);
+              finalQuery = resolved;
+            }
+
+            console.log('Running normal AlaSQL query: ', finalQuery);
+            result = alasql(finalQuery, [editorData.value]);
             queryResult.value = result;
         }
 
@@ -252,7 +269,7 @@ function runQuery() {
         }
     } catch (error) {
         console.error('Query Error:', error);
-        queryResult.value = { error: 'Invalid Query' };
+        queryResult.value = { error: 'Invalid Query: ' + error.message };
     }
 }
 
@@ -292,6 +309,18 @@ const handleFieldClick = (event) => {
         queryResult: queryResult.value === schemaDefinitions.value ? null : queryResult.value
     })
 };
+
+/**
+ * Handles the query template selected event from DataViewer.
+ *
+ * @param {Event} event - The event object.
+ * @param {string} event.detail.query - The query template selected.
+ */
+const handleTemplateSelected = (event) => {
+  const template = event.detail.query;
+  console.log('SchemaPanel: Template selected: ', template);
+  query.value = template;
+}
 </script>
 
 
