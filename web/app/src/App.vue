@@ -105,6 +105,18 @@
 
       <!-- Only show main content when logged in and not on dashboard -->
       <template v-else>
+        <!-- S3 Load Button - Center of the page -->
+        <div class="s3-load-section">
+          <button
+            class="s3-load-button"
+            @click="loadDataFromS3"
+            :disabled="isLoadingS3"
+          >
+            <span v-if="isLoadingS3">Loading...</span>
+            <span v-else>New Field Data</span>
+          </button>
+        </div>
+
         <FileUpload @fileParsed="handleFileParsed" />
         <TabComponent
           v-if="tabs"
@@ -218,6 +230,17 @@ const currentEditor = ref('schema');
 // open/close.
 const dataViewerRef = ref(null);
 
+// Loading state for S3 data
+const isLoadingS3 = ref(false);
+
+// Organization to S3 URL mapping
+const orgS3Urls = {
+  'ncf': 'https://fomomon.s3.amazonaws.com/ncf/db.json'
+};
+
+// Current organization (hardcoded for now)
+const currentOrg = 'ncf';
+
 onMounted(() => {
   console.log('App mounted');
   window.addEventListener('keydown', handleKeyDown);
@@ -226,6 +249,43 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
 });
+
+// Loads data from S3 and navigates to dashboard
+const loadDataFromS3 = async () => {
+  try {
+    isLoadingS3.value = true;
+    console.log('Loading data from S3...');
+
+    const s3Url = orgS3Urls[currentOrg];
+    if (!s3Url) {
+      throw new Error(`No S3 URL configured for organization: ${currentOrg}`);
+    }
+
+    const response = await fetch(s3Url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('S3 data loaded:', data);
+
+    // Set the joined data directly
+    joinedData.value = data;
+
+    // Navigate to dashboard
+    router.push({
+      name: 'Dashboard',
+    });
+
+  } catch (error) {
+    console.error('Error loading data from S3:', error);
+    alert(`Failed to load data from S3 for organization ${currentOrg}. Please check the console for details.`);
+    // error handling
+  } finally {
+    isLoadingS3.value = false;
+  }
+};
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -403,6 +463,42 @@ const handleKeyDown = (e) => {
   border: none;
   border-top: 1px solid rgba(73, 94, 92, 0.4);
   margin: 1rem 0;
+}
+
+.s3-load-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  min-width: 60vw;
+  margin-bottom: 2rem;
+}
+
+.s3-load-button {
+  background: linear-gradient(135deg, #1E628C 0%, #3388ff 100%);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(30, 98, 140, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.s3-load-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(30, 98, 140, 0.4);
+  background: linear-gradient(135deg, #3388ff 0%, #1E628C 100%);
+}
+
+.s3-load-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .schema-section {
