@@ -35,6 +35,8 @@ export default {
             type: Object,
             default: null,
         },
+        // TODO(prashanth@): remove this prop. It is currently unused and
+        // passed as null from the parent.
         geoJsonData: {
             type: Array,
             default: () => [],
@@ -192,11 +194,14 @@ export default {
         // End copied methods from WriterMapComponent.vue
 
         initializeMap() {
-            // Initialize the map without setting the view
+            // Initialize the map with a default view first
             this.map = L.map("map", {
                 attributionControl: false,
                 zoomControl: false,
             });
+
+            // Set a default view to ensure the map is properly initialized
+            this.map.setView([0, 0], 2);
 
             // Add the Esri Gray (Light) basemap
             this.baseLayers.dark.addTo(this.map);
@@ -205,8 +210,6 @@ export default {
             this.loadGeoJsonData();
         },
         loadGeoJsonData() {
-            if (!this.geoJsonData) return;
-
             // Create a bounds object to track the extent of all layers
             const bounds = L.latLngBounds([]);
 
@@ -256,12 +259,39 @@ export default {
             });
 
             // Fit the map to the bounds with some padding
-            if (!bounds.isValid()) return;  // Safety check if no valid bounds
-            this.map.fitBounds(bounds, {
-                padding: [50, 50],  // Add 50px padding around the bounds
+            if (bounds.isValid()) {
+              this.map.fitBounds(bounds, {
+                  padding: [50, 50],  // Add 50px padding around the bounds
                 maxZoom: 16        // Prevent zooming in too far
-            });
+                });
+            } else {
+              this.centerOnQueryResultPoints();
+            }
         },
+
+        centerOnQueryResultPoints() {
+          if (!this.queryResult || !Array.isArray(this.queryResult) || this.queryResult.length === 0) {
+            // Fallback to default world view
+            this.map.setView([0, 0], 2);
+            return;
+          }
+
+          const points = this.processMapPoints(this.queryResult);
+          if (points.length === 0) {
+            // Fallback to default world view
+            this.map.setView([0, 0], 2);
+            return;
+          }
+
+          const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
+          this.map.flyToBounds(bounds, {
+            padding: [50, 50],
+            maxZoom: 13,
+            duration: 1,
+            easeLinearity: 0.3,
+          });
+        },
+
         toggleDropdown() {
             this.dropdownOpen = !this.dropdownOpen;
         },
@@ -306,6 +336,11 @@ export default {
             });
 
             this.markerLayer.addTo(this.map);
+
+            // Center on the new points if no geoJsonData bounds were set
+            if (!this.geoJsonData || this.geoJsonData.length === 0) {
+              this.centerOnQueryResultPoints();
+            }
         },
     },
 };

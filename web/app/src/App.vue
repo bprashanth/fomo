@@ -93,7 +93,7 @@
       }">
       <router-view
         :schema="joinedData ? {schema: joinedData[0]} : { schema: {} }"
-        :geoJsonData="savedGeoJsonData"
+        :geoJsonData="[]"
         :data="joinedData"
         v-if="$route.name === 'Dashboard'"
       ></router-view>
