@@ -79,6 +79,10 @@ export default {
       // needs to access the DOM, like we need here for leaflet).
       this.$nextTick(() => {
         this.initializeMap();
+
+        if (this.queryResult && this.queryResult.length > 0) {
+            this.updateMarkers(this.queryResult);
+        }
       });
     },
     watch: {
@@ -272,6 +276,9 @@ export default {
         },
         updateMarkers(data) {
             if (!data) {
+                return
+            }
+            if (!this.map) {
                 return
             }
             const points = this.processMapPoints(data);

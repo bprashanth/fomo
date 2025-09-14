@@ -75,29 +75,10 @@ import ImagePanel from "./ImagePanel.vue";
 import SurveyResultPanel from "./SurveyResultPanel.vue";
 import ConnectionsPanel from './ConnectionsPanel.vue';
 
-// This variable controls the active tab in the schema/query panel.
-const activeTab = ref('schema');
-const field = ref(null);
-const fieldQueryResult = ref(null);
-const queryResult = ref(null);
-
-// hoveredBoundary contains the geojson of the connections panel mouseover
-// events. It's emitted as an event in ConnectionsPanel and passed to
-// MapComponent.
-const hoveredBoundary = ref(null);
-
-// NoteUpdate is an object:
-// {
-//   notes: [notes added to image],
-//   fieldKey: 'key to image field',
-//   fieldValue: 'value of image field'
-// }
-const noteUpdate = ref(null);
-
 // Handle and process props from other components.
 // Eg the projects component opens up this page with each jobs schema and data.
 // This "hydration" process happens via props.
-defineProps({
+const props = defineProps({
   schema: {
     type: Object,
     required: false
@@ -111,6 +92,25 @@ defineProps({
     required: false
   }
 });
+
+// This variable controls the active tab in the schema/query panel.
+const activeTab = ref('schema');
+const field = ref(null);
+const fieldQueryResult = ref(null);
+const queryResult = ref(props.data);
+
+// hoveredBoundary contains the geojson of the connections panel mouseover
+// events. It's emitted as an event in ConnectionsPanel and passed to
+// MapComponent.
+const hoveredBoundary = ref(null);
+
+// NoteUpdate is an object:
+// {
+//   notes: [notes added to image],
+//   fieldKey: 'key to image field',
+//   fieldValue: 'value of image field'
+// }
+const noteUpdate = ref(null);
 
 const handleNoteUpdate = (newNoteUpdate) => {
   console.log("DashboardComponent: handleNoteUpdate, newNoteUpdate: ", newNoteUpdate);
