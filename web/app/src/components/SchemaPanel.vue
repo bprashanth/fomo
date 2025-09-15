@@ -21,6 +21,16 @@
             <JsonViewer :value="limitedQueryResult" sort theme="dark" @click="handleFieldClick"/>
         </div>
     </div>
+
+    <!-- Query Template Modal -->
+    <QueryTemplateModal
+      :show="showQueryModal"
+      :placeholderName="modalData?.placeholderName"
+      :data="modalData?.data"
+      :template="modalData?.template"
+      @resolved="handleModalResolved"
+      @close="handleModalClose"
+    />
 </template>
 
 <script setup>
@@ -31,7 +41,8 @@ import alasql from 'alasql';
 import { JsonViewer } from 'vue3-json-viewer';
 import "vue3-json-viewer/dist/index.css";
 
-import { resolveNaturalLanguageQuery } from '../services/queryTemplateService.js';
+import { resolveNaturalLanguageQueryAsync } from '../services/queryTemplateService.js';
+import QueryTemplateModal from './QueryTemplateModal.vue';
 
 // const schemaData = schemaDefinitions;
 const query = ref('');
@@ -186,7 +197,39 @@ function extractSensorValues(obj, pathParts, parentIndex) {
   return currentValues;
 }
 
-function runQuery() {
+// Modal state
+const showQueryModal = ref(false);
+const modalData = ref(null);
+
+// Listen for modal events
+onMounted(() => {
+  window.addEventListener('show-query-template-modal', handleShowModal);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('show-query-template-modal', handleShowModal);
+});
+
+function handleShowModal(event) {
+  modalData.value = event.detail;
+  showQueryModal.value = true;
+}
+
+function handleModalResolved(sql) {
+  if (sql) {
+    query.value = sql;
+    runQuery(); // Execute the resolved query
+  }
+  showQueryModal.value = false;
+  modalData.value = null;
+}
+
+function handleModalClose() {
+  showQueryModal.value = false;
+  modalData.value = null;
+}
+
+async function runQuery() {
     console.log('Running query...')
     if (!editorData.value) {
         queryResult.value = { error: 'Data not loaded yet' };
@@ -251,7 +294,7 @@ function runQuery() {
             queryResult.value = results;
         } else {
             let finalQuery = query.value;
-            const resolved = resolveNaturalLanguageQuery(
+            const resolved = await resolveNaturalLanguageQueryAsync(
               query.value, editorData.value);
             if (resolved) {
               console.log('Resolved natural query to SQL: ', resolved);
