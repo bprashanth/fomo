@@ -25,7 +25,7 @@ Step 2: Select a value from the available values for that key.
       <div class="modal-content">
         <!-- Step 1: Key Selection -->
         <div v-if="step === 1" class="step-container">
-          <!-- <p>Select a field that matches "{{ placeholderName }}":</p> -->
+          <p>Suggested:</p>
           <div class="options-list">
             <div
               v-for="key in matchingKeys"
@@ -36,11 +36,29 @@ Step 2: Select a value from the available values for that key.
               {{ key }}
             </div>
           </div>
+
+          <div class="expandable-section">
+            <div class="section-header" @click="toggleDropdown">
+              <span class="section-title">All fields</span>
+              <span class="expand-arrow" :class="{ 'expanded': showDropdown }">▼</span>
+            </div>
+            <div v-if="showDropdown" class="expandable-content">
+              <div class="options-list">
+                <div
+                  v-for="key in allKeys"
+                  :key="key"
+                  class="option-item"
+                  @click="selectDropdownKey(key)"
+                >
+                  {{ key }}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Step 2: Value Selection -->
         <div v-if="step === 2" class="step-container">
-          <!-- <p>Select a value for "{{ selectedKey }}":</p> -->
           <div class="options-list">
             <div
               v-for="value in uniqueValues"
@@ -89,6 +107,8 @@ const emit = defineEmits(['close', 'resolved']);
 const step = ref(1);
 const selectedKey = ref(null);
 const selectedValue = ref(null);
+const showDropdown = ref(false);
+// Remove selectedDropdownKey as it's not needed
 
 // Hardcoded fuzzy matching for sitename placeholder
 const sitenameKeyPatterns = [
@@ -102,6 +122,20 @@ const modalTitle = computed(() => {
   } else {
     return `Select Value for "${selectedKey.value}"`;
   }
+});
+
+// Get all first-level keys from the data
+const allKeys = computed(() => {
+  if (!props.data || props.data.length === 0) return [];
+
+  const keys = new Set();
+  props.data.forEach(row => {
+    Object.keys(row).forEach(key => {
+      keys.add(key);
+    });
+  });
+
+  return Array.from(keys).sort();
 });
 
 // Find all keys that could match the placeholder
@@ -142,6 +176,16 @@ const uniqueValues = computed(() => {
   return Array.from(values).sort();
 });
 
+function toggleDropdown() {
+  showDropdown.value = !showDropdown.value;
+}
+
+function selectDropdownKey(key) {
+  selectedKey.value = key;
+  showDropdown.value = false;
+  step.value = 2;
+}
+
 function selectKey(key) {
   selectedKey.value = key;
   step.value = 2;
@@ -177,6 +221,8 @@ function closeModal() {
   step.value = 1;
   selectedKey.value = null;
   selectedValue.value = null;
+  showDropdown.value = false;
+  // selectedDropdownKey.value = null; // This line was removed by the user's edit hint
   emit('close');
 }
 
@@ -186,6 +232,8 @@ watch(() => props.show, (newShow) => {
     step.value = 1;
     selectedKey.value = null;
     selectedValue.value = null;
+    showDropdown.value = false;
+    // selectedDropdownKey.value = null; // This line was removed by the user's edit hint
   }
 });
 </script>
@@ -314,4 +362,56 @@ watch(() => props.show, (newShow) => {
 .cancel-button:hover {
   background-color: #5a6268;
 }
+
+/* Expandable section styles */
+.expandable-section {
+  margin-top: 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.section-header:hover {
+  background-color: #e9ecef;
+  border-color: #dee2e6;
+}
+
+.section-title {
+  font-size: 14px;
+  color: #495057;
+  font-weight: 500;
+}
+
+.expand-arrow {
+  font-size: 12px;
+  color: #6c757d;
+  transition: transform 0.2s ease;
+}
+
+.expand-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.expandable-content {
+  margin-top: 8px;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  background: white;
+}
+
+.expandable-content .options-list {
+  border: none;
+  border-radius: 0;
+  max-height: 250px;
+}
 </style>
+
