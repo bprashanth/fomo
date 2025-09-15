@@ -245,7 +245,7 @@ watch(() => props.show, (newShow) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -253,12 +253,12 @@ watch(() => props.show, (newShow) => {
 }
 
 .modal-card {
-  background: white;
+  background-color: #333;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  max-width: 500px;
   width: 90%;
+  max-width: 600px;
   max-height: 80vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -268,20 +268,21 @@ watch(() => props.show, (newShow) => {
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #555;
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #333;
+  color: #fff;
+  font-family: monospace;
 }
 
 .modal-close {
   background: none;
   border: none;
+  color: #fff;
   font-size: 24px;
   cursor: pointer;
-  color: #666;
   padding: 0;
   width: 30px;
   height: 30px;
@@ -296,33 +297,36 @@ watch(() => props.show, (newShow) => {
 
 .modal-content {
   padding: 20px;
-  flex: 1;
+  flex-grow: 1;
   overflow-y: auto;
 }
 
 .step-container p {
   margin-bottom: 15px;
-  color: #555;
+  color: #fff;
   font-size: 16px;
+  font-family: monospace;
 }
 
 .options-list {
   max-height: 300px;
   overflow-y: auto;
-  border: 1px solid #ddd;
+  border: 1px solid #555;
   border-radius: 4px;
+  background-color: #444;
 }
 
 .option-item {
   padding: 12px 15px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #555;
   transition: background-color 0.2s;
-  color: #6a6767;
+  color: #fff;
+  font-family: monospace;
 }
 
 .option-item:hover {
-  background-color: #f5f5f5;
+  background-color: #555;
 }
 
 .option-item:last-child {
@@ -331,23 +335,24 @@ watch(() => props.show, (newShow) => {
 
 .modal-footer {
   padding: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #555;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.back-button, .cancel-button {
+.back-button, .cancel-button, .next-button {
   padding: 8px 16px;
-  border: 1px solid #ddd;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-family: monospace;
+  font-weight: bold;
 }
 
 .back-button {
-  background-color: #f8f9fa;
-  color: #333;
+  background-color: #666;
+  color: #fff;
 }
 
 .back-button:hover {
@@ -355,12 +360,18 @@ watch(() => props.show, (newShow) => {
 }
 
 .cancel-button {
-  background-color: #6c757d;
-  color: white;
+  background-color: #666;
+  color: #fff;
 }
 
-.cancel-button:hover {
-  background-color: #5a6268;
+.next-button {
+  background-color: #317183;
+  color: #282C34;
+}
+
+.next-button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
 }
 
 /* Expandable section styles */
@@ -373,27 +384,28 @@ watch(() => props.show, (newShow) => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background-color: #444;
+  border: 1px solid #555;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .section-header:hover {
-  background-color: #e9ecef;
-  border-color: #dee2e6;
+  background-color: #555;
+  border-color: #666;
 }
 
 .section-title {
   font-size: 14px;
-  color: #495057;
+  color: #fff;
   font-weight: 500;
+  font-family: monospace;
 }
 
 .expand-arrow {
   font-size: 12px;
-  color: #6c757d;
+  color: #fff;
   transition: transform 0.2s ease;
 }
 
@@ -403,15 +415,16 @@ watch(() => props.show, (newShow) => {
 
 .expandable-content {
   margin-top: 8px;
-  border: 1px solid #e9ecef;
+  border: 1px solid #555;
   border-radius: 4px;
-  background: white;
+  background-color: #333;
 }
 
 .expandable-content .options-list {
   border: none;
   border-radius: 0;
   max-height: 250px;
+  background-color: #333;
 }
 </style>
 

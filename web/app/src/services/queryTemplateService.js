@@ -49,7 +49,7 @@ const defaultTemplates = [
       pattern: /create a timelapse of images in site (.+)/i,
       label: 'Create a timelapse of images in site <sitename>',
       extract: (match) => match[1],
-      sqlTemplate: "SELECT * FROM ? WHERE <key> = '<value>' ORDER BY date",
+      sqlTemplate: "SELECT * FROM ? WHERE <key> = '<value>' ORDER BY timestamp",
       placeholders: ['sitename']
     }
   ];
