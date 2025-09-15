@@ -108,7 +108,7 @@ export default {
             const sampleSize = Math.min(data.length, 10);
             for (let i = 0; i < sampleSize; i++) {
                 const value = getFieldValue(data[i], fieldName);
-                if (isNaN(parseFloat(value))) {
+                if (isNaN(Number(value)) || value === '') {
                     return false;
                 }
             }
