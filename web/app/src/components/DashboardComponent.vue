@@ -9,7 +9,9 @@
       <MapComponent
       :queryResult="queryResult"
       :hoveredBoundary="hoveredBoundary"
-      :geoJsonData="geoJsonData"/>
+      :geoJsonData="geoJsonData"
+      @template-processed="handleTemplateProcessed('map')"
+      :template="templateDispatch.map"/>
     </div>
     <div class="quarter-panel">
       <!-- Tabs: "schema queries" and "find connections" -->
@@ -42,9 +44,11 @@
         v-if="activeTab === 'schema'"
         @field-selected="handleField"
         @query-result-updated="handleQuery"
+        @template-processed="handleTemplateProcessed('schema')"
         :schema="schema"
         :noteUpdate="noteUpdate"
-        :data="data"/>
+        :data="data"
+        :template="templateDispatch.schema"/>
 
         <!-- Connections panel: displays the intersections of this study
             It passes out a prop to the map panel for the path to the geojson boundary of the clicked list result.
@@ -59,16 +63,21 @@
       <ImagePanel
       :field="field"
       :queryResult="queryResult"
-      @note-update="handleNoteUpdate"/>
+      @note-update="handleNoteUpdate"
+      @template-processed="handleTemplateProcessed('image')"
+      :template="templateDispatch.image"/>
     </div>
     <div class="quarter-panel">
-      <SurveyResultPanel :queryResult="queryResult"/>
+      <SurveyResultPanel
+      :queryResult="queryResult"
+      @template-processed="handleTemplateProcessed('survey')"
+      :template="templateDispatch.survey"/>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, defineProps } from 'vue';
+import { ref, defineProps, onMounted, onBeforeUnmount } from 'vue';
 import MapComponent from "./MapComponent.vue";
 import SchemaPanel from "./SchemaPanel.vue";
 import ImagePanel from "./ImagePanel.vue";
@@ -93,6 +102,14 @@ const props = defineProps({
   }
 });
 
+// Template dispatch state - routes templates to appropriate panels
+const templateDispatch = ref({
+  map: null,
+  survey: null,
+  schema: null,
+  image: null
+})
+
 // This variable controls the active tab in the schema/query panel.
 const activeTab = ref('schema');
 const field = ref(null);
@@ -111,6 +128,37 @@ const hoveredBoundary = ref(null);
 //   fieldValue: 'value of image field'
 // }
 const noteUpdate = ref(null);
+
+onMounted(() => {
+  // Listen for template events from DataViewer
+  window.addEventListener('template-selected', handleTemplateDispatch);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('template-selected', handleTemplateDispatch);
+});
+
+function handleTemplateDispatch(event) {
+  // TODO(prashanth@): remove sqlTemplate once the migration is complete
+  const template = event.detail.template;
+
+  if (template && template.targetPanel) {
+    const targetPanel = template.targetPanel;
+    // Eg: Insert template.schema = template so the schema panel renders it.
+    if (targetPanel in templateDispatch.value) {
+      templateDispatch.value[targetPanel] = template;
+      console.log('DashboardComponent: Routed template to ${targetPanel} panel:', template);
+    } else {
+      console.warn('DashboardComponent: Unknown target panel: ', targetPanel);
+    }
+  }
+}
+
+function handleTemplateProcessed(panelName) {
+  console.log('DashboardComponent: Template processed by ${panelName} panel');
+  // Clear the template after processing to prevent re-processing.
+  templateDispatch.value[panelName] = null;
+}
 
 const handleNoteUpdate = (newNoteUpdate) => {
   console.log("DashboardComponent: handleNoteUpdate, newNoteUpdate: ", newNoteUpdate);
