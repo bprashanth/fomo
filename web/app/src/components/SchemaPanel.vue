@@ -24,10 +24,12 @@
 
     <!-- Query Template Modal -->
     <QueryTemplateModal
-      :show="showQueryModal"
-      :placeholderName="modalData?.placeholderName"
-      :data="modalData?.data"
-      :template="modalData?.template"
+      :show="modalState.show"
+      :placeholderName="modalState.placeholderName"
+      :data="modalState.data"
+      :template="modalState.template"
+      :values="modalState.values"
+      :keyFieldName="modalState.keyFieldName"
       @resolved="handleModalResolved"
       @close="handleModalClose"
     />
@@ -41,12 +43,9 @@ import alasql from 'alasql';
 import { JsonViewer } from 'vue3-json-viewer';
 import "vue3-json-viewer/dist/index.css";
 
-import { resolveNaturalLanguageQueryAsync } from '../services/queryTemplateService.js';
 import QueryTemplateModal from './QueryTemplateModal.vue';
 
 // const schemaData = schemaDefinitions;
-const query = ref('');
-const editorData = ref(null);
 const emit = defineEmits(['field-selected', 'query-result-updated']);
 
 const props = defineProps({
@@ -58,13 +57,14 @@ const props = defineProps({
     type: Array,
     required: false
   },
-  // NoteUpdate is an object:
+  // Template is an object:
   // {
-  //   notes: [notes added to image],
-  //   fieldKey: 'key to image field',
-  //   fieldValue: 'value of image field'
+  //   sqlTemplate: 'SELECT * FROM ...',
+  //   placeholderName: '...',
+  //   data: [...],
+  //   targetPanel: 'ImagePanel'
   // }
-  noteUpdate: {
+  template: {
     type: Object,
     required: false,
     default: null
@@ -72,67 +72,19 @@ const props = defineProps({
 });
 console.log("Props from schema panel ", props);
 
-// Why do we need watch?
-// Notes are sent in from the ImagePanel, piped up to the DashboardComponent,
-// and then down to the SchemaPanel.
-// When the user annotates an image with notes, we update the editorData (which
-// is the local copy of the joinedData coming in from the App.vue) with notes.
-// This way when the user runs a new query, the notes are included in the query
-// result.
-watch(() => props.noteUpdate, (newNoteUpdate) => {
-  if (!newNoteUpdate || !editorData.value) return;
-
-  const { notes, fieldKey, fieldValue } = newNoteUpdate;
-
-  // Find the matching record in editorData
-  const recordIndex = editorData.value.findIndex(record => {
-    // Handle nested paths using reduce
-    const content = getValueByPath(record, fieldKey);
-    if (typeof content != 'string' || !content) {
-      return false;
-    }
-    if (content.trim().replace(/['"]+/g, '') === fieldValue) {
-        console.log("SchemaPanel: found matching record for notes: fieldKey: ", fieldKey, "fieldValue: ", fieldValue);
-        return true;
-    } else if (content.includes(fieldValue)) {
-        console.log("SchemaPanel: found similar record notes: fieldKey: ", fieldKey, "fieldValue: ", fieldValue);
-        return true;
-    }
-    return false;
-  });
-
-  if (recordIndex !== -1) {
-    // Create a new copy of the record to maintain reactivity
-    const updatedRecord = { ...editorData.value[recordIndex] };
-    updatedRecord.notes = notes;
-
-    // Update the editorData array
-    editorData.value = [
-      ...editorData.value.slice(0, recordIndex),
-      updatedRecord,
-      ...editorData.value.slice(recordIndex + 1)
-    ];
-  }
-}, { deep: true });
-
-/**
- * Gets the value of a field by its path.
- *
- * @params
- *  - obj: The object to get the value from.
- *  - path: The path to the value.
- *
- * @returns {Object} The value of the field.
- */
-const getValueByPath = (obj, path) => {
-    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
-};
-
+const query = ref('');
 // Rather than import from assets like so:
 // we keep all the data files in public/data and fetch them in onMounted.
 const schemaDefinitions = ref(null);
 const queryResult = ref(null);
 
+watch (() => props.template, (newTemplate) => {
+  if (newTemplate && newTemplate.sqlTemplate) {
+    console.log('SchemaPanel: Auto-executing template: ', newTemplate);
+    query.value = newTemplate.sqlTemplate;
+    runQuery();
+  }
+}, { immediate: true });
 
 // HACK: We limit the number of results to 100, because the JsonViewer is slow
 // and crashes the browser when there are too many results. It also blocks
@@ -146,165 +98,69 @@ const limitedQueryResult = computed(() => {
 });
 
 onMounted(async () => {
-    editorData.value = props.data;
     schemaDefinitions.value = props.schema;
     queryResult.value = schemaDefinitions.value;
-
-    // Handle the query template selected event from DataViewer
-    window.addEventListener('template-selected', handleTemplateSelected);
-
-    console.log("SchemaPanel: onMounted, editorData: ", editorData.value, "schemaDefinitions: ", schemaDefinitions.value);
+    console.log("SchemaPanel: onMounted, schemaDefinitions: ", schemaDefinitions.value);
 });
-
-onBeforeUnmount(() => {
-  window.removeEventListener('template-selected', handleTemplateSelected);
-});
-
-
-function extractSensorValues(obj, pathParts, parentIndex) {
-  /**
-   * Extract sensor data according to the given path.
-   * @param {Object} obj - The input object to extract values from.
-   * @param {Array} pathParts - List of path segments like ['cameraTrap', 'inference', 'field1'].
-   * @param {Number} parentIndex - The index of the parent row in the master list.
-   * @return {Array} - Returns a flat list of all matching values, each with a reference to its parent index.
-   */
-  if (!obj.sensors || !Array.isArray(obj.sensors)) return [];
-
-  let currentValues = obj.sensors;
-
-  for (const part of pathParts) {
-    const newValues = [];
-
-    for (const currentValue of currentValues) {
-      if (typeof currentValue === 'object' && currentValue[part]) {
-        const extractedValue = currentValue[part];
-
-        if (Array.isArray(extractedValue)) {
-          for (const value of extractedValue) {
-            newValues.push({ ...value, __parentIndex__: parentIndex }); // Attach parent index
-          }
-        } else {
-          newValues.push({ ...extractedValue, __parentIndex__: parentIndex }); // Attach parent index
-        }
-      }
-    }
-
-    if (newValues.length === 0) return [];
-    currentValues = newValues;
-  }
-
-  return currentValues;
-}
 
 // Modal state
-const showQueryModal = ref(false);
-const modalData = ref(null);
+const modalState = ref({
+  show: false,
+  placeholderName: null,
+  data: null,
+  template: null,
+  values: null
+});
+
+let modalResolveCallback = null;
 
 // Listen for modal events
 onMounted(() => {
-  window.addEventListener('show-query-template-modal', handleShowModal);
+  // No longer needed - direct function calls instead of events
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('show-query-template-modal', handleShowModal);
+  // No longer needed
 });
 
-function handleShowModal(event) {
-  modalData.value = event.detail;
-  showQueryModal.value = true;
-}
 
-function handleModalResolved(sql) {
-  if (sql) {
-    query.value = sql;
-    runQuery(); // Execute the resolved query
+function handleModalResolved(selection) {
+  console.log("SchemaPanel: handleModalResolved: selection ", selection);
+  if (modalResolveCallback) {
+    modalResolveCallback(selection);
+    modalResolveCallback = null;
   }
-  showQueryModal.value = false;
-  modalData.value = null;
+  modalState.value.show = false;
 }
 
 function handleModalClose() {
-  showQueryModal.value = false;
-  modalData.value = null;
+  modalState.value.show = false;
+  modalResolveCallback = null;
 }
 
 async function runQuery() {
     console.log('Running query...')
-    if (!editorData.value) {
+    if (!props.data) {
         queryResult.value = { error: 'Data not loaded yet' };
         return;
     }
 
     try {
-        let result;
+        let finalQuery;
 
-        // Check if the query contains "sensors->", meaning it needs special logic
-        if (query.value.includes('sensors->')) {
-            console.log('Running sensor-based query');
-
-            // Step 1: Split the query into prefix, path, and suffix
-            const parts = query.value.split('->');
-            const prefix = parts[0].replace(/sensors$/, '').trim(); // Get everything before sensors
-            const suffix = parts[parts.length - 1]; // The last part is like "prediction='other'"
-            const pathParts = parts.slice(1, -1).map(part => part.replace(/[^a-zA-Z0-9_]/g, '')); // Remove special chars
-
-            console.log('Query Parts:', { prefix, pathParts, suffix });
-
-            // Step 2: Flatten the data using the path
-            const extractedData = editorData.value.flatMap((record, index) => extractSensorValues(record, pathParts, index));
-
-            // Step 3: Run the final query on the flattened data
-            const finalQuery = `${prefix} ${suffix}`.replace(/COUNT\(\*\)/i, '*');
-            console.log('New Query (after replacement):', finalQuery);
-
-            const queryResultWithChildren = alasql(finalQuery, [extractedData]);
-
-            // Step 5: Extract the parent objects from the query results using parent indexes
-            const parentObjects = queryResultWithChildren.map(item => editorData.value[item.__parentIndex__]); // Extract parent using index
-            const uniqueParents = Array.from(new Set(parentObjects.map(obj => JSON.stringify(obj)))).map(json => JSON.parse(json));
-            console.log('Parent Objects:', uniqueParents);
-
-            if (query.value.toLowerCase().includes('count(*)')) {
-                queryResult.value = [{ total: uniqueParents.length }];
-            } else {
-                queryResult.value = uniqueParents;
+        if (props.template && props.template.sqlTemplate) {
+            finalQuery = await resolveTemplateQuery(props.template, props.data);
+            if (!finalQuery) {
+                throw new Error('Failed to resolve template placeholders');
             }
-
-        } else if (query.value.includes('notes->text')) {
-            console.log('Notes query: ', query.value);
-
-            // Split the query on AND to separate notes query from additional
-            // conditions. Don't toLower this query, as the params are case
-            // sensitive.
-            // TODO(prashanth@): check if AND is included in the query.
-            const [notesQuery, ...additionalClauses] = query.value.split(' and ');
-
-            // First get results from notes query
-            let results = queryNotes(notesQuery);
-
-            // If there are additional clauses, run them through alasql
-            if (additionalClauses.length > 0) {
-              // Reconstruct the remaining query
-              const conditions = additionalClauses.join(' AND ').trim();
-              results = alasql("select * from ? where " + conditions, [results]);
-              console.log('Results after additional filters: ', conditions, ' are ', results);
-            }
-
-            queryResult.value = results;
+            query.value = finalQuery;
         } else {
-            let finalQuery = query.value;
-            const resolved = await resolveNaturalLanguageQueryAsync(
-              query.value, editorData.value);
-            if (resolved) {
-              console.log('Resolved natural query to SQL: ', resolved);
-              finalQuery = resolved;
-            }
-
-            console.log('Running normal AlaSQL query: ', finalQuery);
-            result = alasql(finalQuery, [editorData.value]);
-            queryResult.value = result;
+            // This is a raw sql query, so we can just use it
+            finalQuery = query.value;
         }
+
+        console.log('Running query: ', finalQuery);
+        queryResult.value = alasql(finalQuery, [props.data]); // Use props.data directly
 
         if (queryResult.value) {
             console.log("SchemaPanel: emitting query-result-updated with: ", queryResult.value)
@@ -316,28 +172,169 @@ async function runQuery() {
     }
 }
 
+// New function to handle template resolution
+async function resolveTemplateQuery(template, data) {
+  console.log("SchemaPanel: resolveTemplateQuery: template ", template, " data ", data);
+  // Extract placeholders from template
+  const placeholders = template.placeholders || extractPlaceholdersFromLabel(template.label);
+  const placeholderPatterns = extractPlaceholderPatterns(template.sqlTemplate);
 
-const queryNotes = (query) => {
-  console.log('Querying notes: ', query);
-
-  const regexMatch = query.match(/notes->text\s*=\s*["'](.+?)["']/i);
-  if (!regexMatch) {
-    console.warning('Invalid notes query: ', query);
-    return [];
+  if (placeholders.length === 0 && placeholderPatterns.length === 0) {
+    // No placeholders - return template as-is
+    return template.sqlTemplate;
   }
 
-  // Get the pattern and convert SQL wildcards (*) to regex wildcards (.*)
-  let pattern = regexMatch[1].replace(/\*/g, '.*');
-  const regex = new RegExp(pattern, 'i');
+  // Resolve placeholders
+  const resolvedPlaceholders = await resolvePlaceholders(template, data, placeholders, placeholderPatterns);
 
-  // Filter the editorData to find records with matching notes
-  return editorData.value.filter(record => {
-    if (!record.notes || !Array.isArray(record.notes)) {
-      return false;
+  if (!resolvedPlaceholders) {
+    return null;
+  }
+
+  // Replace placeholders in SQL template
+  return replacePlaceholdersInQuery(template.sqlTemplate, resolvedPlaceholders);
+}
+
+// Helper functions for placeholder resolution
+function extractPlaceholdersFromLabel(label) {
+  const placeholderRegex = /<(\w+)>/g;
+  const placeholders = [];
+  let match;
+
+  while ((match = placeholderRegex.exec(label)) !== null) {
+    placeholders.push(match[1]);
+  }
+
+  return placeholders;
+}
+
+function extractPlaceholderPatterns(sqlTemplate) {
+  const patternRegex = /<(\w+_key|\w+_value)>/g;
+  const patterns = [];
+  let match;
+
+  while ((match = patternRegex.exec(sqlTemplate)) !== null) {
+    patterns.push(match[1]);
+  }
+
+  return patterns;
+}
+
+async function resolvePlaceholders(template, data, placeholders, placeholderPatterns) {
+  const resolved = {};
+
+  // Resolve placeholders from label
+  for (const placeholder of placeholders) {
+    const keyPattern = `${placeholder}_key`;
+    const valuePattern = `${placeholder}_value`;
+
+    // Check if this placeholder needs key resolution
+    if (placeholderPatterns.includes(keyPattern)) {
+      const key = await resolvePlaceholderKey(placeholder, data);
+      if (!key) return null;
+      resolved[keyPattern] = key;
     }
-    // Check if any note's text matches the regex
-    return record.notes.some(note => regex.test(note.text));
+
+    // Check if this placeholder needs value resolution
+    if (placeholderPatterns.includes(valuePattern)) {
+      const value = await resolvePlaceholderValue(placeholder, data, resolved[keyPattern]);
+      if (!value) return null;
+      resolved[valuePattern] = value;
+    }
+  }
+
+  // Resolve embedded unknowns (like timestamp_key)
+  for (const pattern of placeholderPatterns) {
+    if (!resolved[pattern] && pattern.endsWith('_key')) {
+      const placeholderName = pattern.replace('_key', '');
+      const key = await resolvePlaceholderKey(placeholderName, data);
+      if (!key) return null;
+      resolved[pattern] = key;
+    }
+    // TODO: Handle _value patterns for embedded unknowns
+  }
+
+  return resolved;
+}
+
+/**
+ * Resolves a placeholder to a specific key in the given data.
+ *
+ * @param placeholderName - The name of the placeholder to resolve, e.g.
+ *  "timestamp" (NB: the caller must strip the _key suffix)
+ * @param data - The data to resolve the placeholder from, e.g. the list of raw
+ *  json data objects.
+ * @returns A promise that resolves to the resolved key, eg "date" for
+ *  "timestamp"
+ */
+async function resolvePlaceholderKey(placeholderName, data) {
+  return new Promise((resolve) => {
+    // Show modal to choose a key
+    modalState.value = {
+      show: true,
+      placeholderName,
+      data,
+      template: null,
+      values: null
+    };
+    console.log("SchemaPanel: resolvePlaceholderKey: placeholder ", placeholderName, "  ", data, " modalState: ", modalState.value);
+    // Store callback with the key result. This callback is invoked with the
+    // selection object emitted by the QueryTemplateModal through
+    // handleModalResolved.
+    modalResolveCallback = (selection) => resolve(selection.key);
   });
+}
+
+/**
+ * Resolves a placeholder to a specific value in the given data.
+ *
+ * @param placeholderName - The name of the placeholder to resolve, e.g.
+ *  "timestamp" (NB: the caller must strip the _value suffix)
+ * @param data - The data to resolve the placeholder from, e.g. the list of raw
+ *  json data objects.
+ * @param key - The key to resolve the placeholder from, e.g. "date" for
+ *  "timestamp" will pass a list of all available dates and ask the user to
+ *  choose a value. If the key is not found, the promise will resolve to null.
+ * @returns A promise that resolves to the resolved value, eg "2025-01-01".
+ */
+async function resolvePlaceholderValue(placeholderName, data, key) {
+  return new Promise((resolve) => {
+    // Get unique values for the key
+    const values = getUniqueValuesForKey(data, key);
+    modalState.value = {
+      show: true,
+      placeholderName,
+      data,
+      template: null,
+      keyFieldName: key,
+      values
+    };
+    console.log("SchemaPanel: resolvePlaceholderValue: placeholder ", placeholderName, " key ", key, " modalState: ", modalState.value);
+    modalResolveCallback = (selection) => resolve(selection.value);
+  });
+}
+
+function getUniqueValuesForKey(data, key) {
+  if (!data || data.length === 0) return [];
+
+  const values = new Set();
+  data.forEach(row => {
+    if (row[key] !== undefined && row[key] !== null) {
+      values.add(String(row[key]));
+    }
+  });
+
+  return Array.from(values).sort();
+}
+
+function replacePlaceholdersInQuery(sqlTemplate, resolvedPlaceholders) {
+  let finalQuery = sqlTemplate;
+
+  for (const [pattern, value] of Object.entries(resolvedPlaceholders)) {
+    finalQuery = finalQuery.replace(new RegExp(`<${pattern}>`, 'g'), value);
+  }
+
+  return finalQuery;
 }
 
 
@@ -352,18 +349,6 @@ const handleFieldClick = (event) => {
         queryResult: queryResult.value === schemaDefinitions.value ? null : queryResult.value
     })
 };
-
-/**
- * Handles the query template selected event from DataViewer.
- *
- * @param {Event} event - The event object.
- * @param {string} event.detail.query - The query template selected.
- */
-const handleTemplateSelected = (event) => {
-  const template = event.detail.query;
-  console.log('SchemaPanel: Template selected: ', template);
-  query.value = template;
-}
 </script>
 
 

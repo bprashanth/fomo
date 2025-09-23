@@ -27,6 +27,10 @@ import "leaflet/dist/leaflet.css";
 export default {
     name: "MapComponent",
     props: {
+        template: {
+            type: Object,
+            default: null,
+        },
         queryResult: {
             type: Array,
             default: () => [],
@@ -72,6 +76,7 @@ export default {
             hoverLayer: null,
         }
     },
+
     mounted() {
       // On the use of nextTick:
       // Next tick forces onMounted to run after the DOM has updated (i.e in
@@ -82,13 +87,13 @@ export default {
       this.$nextTick(() => {
         this.initializeMap();
 
-        if (this.queryResult && this.queryResult.length > 0) {
-            this.updateMarkers(this.queryResult);
+        if (this.effectiveQueryResult && this.effectiveQueryResult.length > 0) {
+            this.updateMarkers(this.effectiveQueryResult);
         }
       });
     },
     watch: {
-        queryResult: {
+        effectiveQueryResult: {
             immediate: true,
             handler(newData) {
                 this.updateMarkers(newData);
@@ -108,6 +113,11 @@ export default {
                 }
             },
         },
+    },
+    computed: {
+      effectiveQueryResult() {
+        return this.template?.queryResults || this.queryResult || [];
+      }
     },
     methods: {
 
@@ -270,13 +280,13 @@ export default {
         },
 
         centerOnQueryResultPoints() {
-          if (!this.queryResult || !Array.isArray(this.queryResult) || this.queryResult.length === 0) {
+          if (!this.effectiveQueryResult || !Array.isArray(this.effectiveQueryResult) || this.effectiveQueryResult.length === 0) {
             // Fallback to default world view
             this.map.setView([0, 0], 2);
             return;
           }
 
-          const points = this.processMapPoints(this.queryResult);
+          const points = this.processMapPoints(this.effectiveQueryResult);
           if (points.length === 0) {
             // Fallback to default world view
             this.map.setView([0, 0], 2);

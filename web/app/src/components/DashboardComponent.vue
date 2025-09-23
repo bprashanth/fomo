@@ -139,18 +139,14 @@ onBeforeUnmount(() => {
 });
 
 function handleTemplateDispatch(event) {
-  // TODO(prashanth@): remove sqlTemplate once the migration is complete
   const template = event.detail.template;
 
-  if (template && template.targetPanel) {
-    const targetPanel = template.targetPanel;
-    // Eg: Insert template.schema = template so the schema panel renders it.
-    if (targetPanel in templateDispatch.value) {
-      templateDispatch.value[targetPanel] = template;
-      console.log('DashboardComponent: Routed template to ${targetPanel} panel:', template);
-    } else {
-      console.warn('DashboardComponent: Unknown target panel: ', targetPanel);
-    }
+  if (template) {
+    // ALWAYS route to SchemaPanel first for query execution
+    templateDispatch.value.schema = template;
+    console.log('DashboardComponent: Routing template to SchemaPanel for execution:', template);
+  } else {
+    console.warn('DashboardComponent: Invalid template:', template);
   }
 }
 
@@ -170,16 +166,35 @@ const handleField = ({ field: selectedField, queryResult: result }) => {
   fieldQueryResult.value = result;
 }
 
-const handleQuery = (result) => {
-  queryResult.value = result;
+function handleQuery(result) {
+  const currentTemplate = templateDispatch.value.schema;
+
+  if (currentTemplate) {
+    // Template execution - route to target panel
+    templateDispatch.value[currentTemplate.targetPanel] = {
+      ...currentTemplate,
+      queryResults: result
+    };
+    templateDispatch.value.schema = null; // Clear after routing
+  } else {
+    clearAllTemplates();
+    queryResult.value = result;
+  }
+}
+
+function clearAllTemplates() {
+  templateDispatch.value = {
+    map: null,
+    survey: null,
+    schema: null,
+    image: null
+  }
 }
 
 const handleBoundaryUpdate = (newBoundary) => {
   hoveredBoundary.value = newBoundary;
   console.log(`Professor panel passing new boundary ${hoveredBoundary.value}`);
-
 };
-
 </script>
 
 <style scoped>

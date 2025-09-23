@@ -36,7 +36,7 @@
     <div class="template-item"
     v-for="template in combinedTemplates"
     :key="template.label"
-    @click="handleClick(template.label)">
+    @click="handleClick(template)">
       {{ template.label }}
       <button class="template-button" @click="onDeleteUserQuery(template.label, $event)">DEL</button>
     </div>
@@ -64,13 +64,16 @@ const combinedTemplates = computed(() => [
 /*
  * Emit the clicked template to the parent.
  *
- * This function takes the templateLabel instead of the sql query because the
- * label itself has substitution characters, like <sitename>.
- *
- * @param templateLabel: the NLQ template the user clicks on.
+ * @param template: the NLQ template the user clicks on.
  */
-function handleClick(templateLabel) {
-  emit('template-selected', templateLabel);
+function handleClick(template) {
+  // Add default targetPanel and mode if not present
+  const templateWithDefaults = {
+    ...template,
+    targetPanel: template.targetPanel || 'schema',
+    mode: template.mode || 'replace'
+  };
+  emit('template-selected', templateWithDefaults);
 }
 
 /*

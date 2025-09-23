@@ -9,10 +9,11 @@ Step 2: Select a value from the available values for that key.
   - placeholderName: the placeholder name (e.g., 'sitename')
   - data: the data array to search through
   - template: the template object with sqlTemplate
+  - values: optional array of values to show (for value selection)
 
 @emits:
   - close: when modal is closed
-  - resolved: when key-value pair is selected with the resolved SQL query
+  - resolved: when key-value pair is selected with the selected key/value
 -->
 <template>
   <div v-if="show" class="modal-overlay" @click.self="closeModal">
@@ -24,7 +25,7 @@ Step 2: Select a value from the available values for that key.
 
       <div class="modal-content">
         <!-- Step 1: Key Selection -->
-        <div v-if="step === 1" class="step-container">
+        <div v-if="step === 1 && !props.values" class="step-container">
           <p>Suggested:</p>
           <div class="options-list">
             <div
@@ -58,10 +59,10 @@ Step 2: Select a value from the available values for that key.
         </div>
 
         <!-- Step 2: Value Selection -->
-        <div v-if="step === 2" class="step-container">
+        <div v-if="step === 2 && isValueSelectionMode" class="step-container">
           <div class="options-list">
             <div
-              v-for="value in uniqueValues"
+              v-for="value in props.values"
               :key="value"
               class="option-item"
               @click="selectValue(value)"
@@ -73,7 +74,7 @@ Step 2: Select a value from the available values for that key.
       </div>
 
       <div class="modal-footer">
-        <button v-if="step === 2" @click="goBack" class="back-button">Back</button>
+        <button v-if="step === 2 && isValueSelectionMode && !props.values" @click="goBack" class="back-button">Back</button>
         <button @click="closeModal" class="cancel-button">Cancel</button>
       </div>
     </div>
@@ -82,6 +83,7 @@ Step 2: Select a value from the available values for that key.
 
 <script setup>
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
+import { PLACEHOLDER_ENUMS, PLACEHOLDER_PATTERNS } from '../services/queryTemplateService.js';
 
 const props = defineProps({
   show: {
@@ -99,6 +101,14 @@ const props = defineProps({
   template: {
     type: Object,
     required: true
+  },
+  keyFieldName: {
+    type: String,
+    default: 'default key'
+  },
+  values: {
+    type: Array,
+    default: () => []
   }
 });
 
@@ -108,19 +118,24 @@ const step = ref(1);
 const selectedKey = ref(null);
 const selectedValue = ref(null);
 const showDropdown = ref(false);
-// Remove selectedDropdownKey as it's not needed
+const isValueSelectionMode = computed(() => props.values && props.values.length > 0);
 
-// Hardcoded fuzzy matching for sitename placeholder
-const sitenameKeyPatterns = [
-  'site', 'siteid', 'site_id', 'site-id', 'site_name', 'site-name',
-  'name', 'sitename', 'siteName', 'siteName', 'location', 'loc'
-];
+// Dynamic pattern lookup based on placeholder name
+const placeholderPatterns = computed(() => {
+  // Find the enum key that matches the placeholder name
+  const enumKey = Object.keys(PLACEHOLDER_ENUMS).find(key =>
+    PLACEHOLDER_ENUMS[key] === props.placeholderName
+  );
+
+  // Return the patterns for this placeholder, or empty array if not found
+  return enumKey ? PLACEHOLDER_PATTERNS[enumKey] || [] : [];
+});
 
 const modalTitle = computed(() => {
   if (step.value === 1) {
-    return `Select Field for "${props.placeholderName}"`;
+    return isValueSelectionMode.value ? `Select Value for "${props.placeholderName}"` : `Select Field for "${props.placeholderName}"`;
   } else {
-    return `Select Value for "${selectedKey.value}"`;
+    return `Select Value for "${props.keyFieldName}"`;
   }
 });
 
@@ -152,28 +167,13 @@ const matchingKeys = computed(() => {
   // Filter keys that match our patterns (case insensitive)
   const matching = Array.from(allKeys).filter(key => {
     const lowerKey = key.toLowerCase();
-    return sitenameKeyPatterns.some(pattern =>
+    return placeholderPatterns.value.some(pattern =>
       lowerKey.includes(pattern.toLowerCase()) ||
       pattern.toLowerCase().includes(lowerKey)
     );
   });
 
   return matching.sort();
-});
-
-// Get unique values for the selected key
-const uniqueValues = computed(() => {
-  if (!selectedKey.value || !props.data) return [];
-
-  const values = new Set();
-  props.data.forEach(row => {
-    const value = row[selectedKey.value];
-    if (value !== null && value !== undefined) {
-      values.add(String(value));
-    }
-  });
-
-  return Array.from(values).sort();
 });
 
 function toggleDropdown() {
@@ -183,17 +183,25 @@ function toggleDropdown() {
 function selectDropdownKey(key) {
   selectedKey.value = key;
   showDropdown.value = false;
-  step.value = 2;
+  if (isValueSelectionMode.value) {
+    step.value = 2;
+  } else {
+    emitSelection();
+  }
 }
 
 function selectKey(key) {
   selectedKey.value = key;
-  step.value = 2;
+  if (isValueSelectionMode.value) {
+    step.value = 2;
+  } else {
+    emitSelection();
+  }
 }
 
 function selectValue(value) {
   selectedValue.value = value;
-  resolveQuery();
+  emitSelection();
 }
 
 function goBack() {
@@ -202,18 +210,14 @@ function goBack() {
   selectedValue.value = null;
 }
 
-function resolveQuery() {
-  if (!selectedKey.value || !selectedValue.value) return;
-
-  // Replace placeholders in the SQL template
-  let sql = props.template.sqlTemplate;
-  sql = sql.replace('<key>', selectedKey.value);
-  sql = sql.replace('<value>', selectedValue.value);
-
-  // Replace any other placeholders with the selected value
-  sql = sql.replace(new RegExp(`<${props.placeholderName}>`, 'g'), selectedValue.value);
-
-  emit('resolved', sql);
+function emitSelection() {
+  if (isValueSelectionMode.value && !selectedValue.value) return;
+  // Emit the selected key/value pair
+  emit('resolved', {
+    key: selectedKey.value,
+    value: selectedValue.value,
+    placeholderName: props.placeholderName
+  });
   closeModal();
 }
 
@@ -222,18 +226,16 @@ function closeModal() {
   selectedKey.value = null;
   selectedValue.value = null;
   showDropdown.value = false;
-  // selectedDropdownKey.value = null; // This line was removed by the user's edit hint
   emit('close');
 }
 
 // Reset when modal opens
 watch(() => props.show, (newShow) => {
   if (newShow) {
-    step.value = 1;
+    step.value = isValueSelectionMode.value ? 2 : 1; // Start at step 2 if values provided
     selectedKey.value = null;
     selectedValue.value = null;
     showDropdown.value = false;
-    // selectedDropdownKey.value = null; // This line was removed by the user's edit hint
   }
 });
 </script>

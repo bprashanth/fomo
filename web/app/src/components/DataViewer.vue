@@ -139,10 +139,21 @@ const goToDashboard = () => {
   emit('navigate-dashboard');
 }
 
+// Example template:
+// {
+//   id: "showSiteData",
+//   pattern: /show me (.+) data/i,
+//   label: 'Show me <sitename> data',
+//   targetPanel: 'schema',
+//   mode: 'replace',
+//   extract: (match) => match[1],
+//   sqlTemplate: "SELECT * FROM ? WHERE <key> LIKE '%<value>%'",
+//   placeholders: ['sitename']
+// },
 const handleTemplateSelected = (template) => {
   window.dispatchEvent(new CustomEvent(
     'template-selected', {
-    detail: { query: template },
+    detail: { template: template },
   }));
 }
 

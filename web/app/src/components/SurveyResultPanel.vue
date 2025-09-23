@@ -43,6 +43,7 @@ Chart.register(...registerables);
 export default {
     name: 'SurveyResultPanel',
     props: {
+        template: Object,
         queryResult: {
             type: Array,
             default: () => [],
@@ -59,11 +60,15 @@ export default {
 
         const separator = "->";
 
+        const effectiveQueryResult = computed(() => {
+          return props.template?.queryResults || props.queryResult || [];
+        });
+
         const surveyFields = computed(() => {
-            if (!props.queryResult?.length) return [];
+            if (!effectiveQueryResult.value?.length) return [];
 
             const fields = [];
-            const firstRow = props.queryResult[0];
+            const firstRow = effectiveQueryResult.value[0];
 
             for (const [key, value] of Object.entries(firstRow)) {
                 if (typeof value === 'object' && value !== null) {
@@ -117,7 +122,7 @@ export default {
 
         // Computed property to filter numeric fields for the Z-axis
         const numericFields = computed(() => {
-            return surveyFields.value.filter(field => isNumericField(field, props.queryResult));
+            return surveyFields.value.filter(field => isNumericField(field, effectiveQueryResult.value));
         });
 
         const generatePlot = async () => {
@@ -132,11 +137,11 @@ export default {
             await nextTick();
 
             const xIsNumeric = isNumericField(
-                xAxisField.value, props.queryResult);
+                xAxisField.value, effectiveQueryResult.value);
             const yIsNumeric = isNumericField(
-                yAxisField.value, props.queryResult);
+                yAxisField.value, effectiveQueryResult.value);
 
-            const chartData = props.queryResult.map(item => {
+            const chartData = effectiveQueryResult.value.map(item => {
                 return {
                     x: getFieldValue(item, xAxisField.value),
                     y: getFieldValue(item, yAxisField.value),
@@ -171,10 +176,10 @@ export default {
                     scales: {
                         x: xIsNumeric
                         ? { type: 'linear', title: { display: true, text: xAxisField.value } }
-                        : { type: 'category', labels: [...new Set(props.queryResult.map(item => item[xAxisField.value]))] },
+                        : { type: 'category', labels: [...new Set(effectiveQueryResult.value.map(item => item[xAxisField.value]))] },
                         y: yIsNumeric
                         ? { type: 'linear', title: { display: true, text: yAxisField.value } }
-                        : { type: 'category', labels: [...new Set(props.queryResult.map(item => item[yAxisField.value]))] }
+                        : { type: 'category', labels: [...new Set(effectiveQueryResult.value.map(item => item[yAxisField.value]))] }
                     }
                 }
             });
