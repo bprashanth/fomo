@@ -17,7 +17,7 @@ export const PLACEHOLDER_ENUMS = {
 };
 
 export const PLACEHOLDER_PATTERNS = {
-  SITENAME: ['sitename', 'site', 'siteid', 'site_id', 'site-id', 'site_name', 'site-name', 'name',  'siteName', 'location', 'loc'],
+  SITENAME: ['sitename', 'site', 'siteid', 'site_id', 'site-id', 'site_name', 'site-name', 'name',  'siteName', 'location', 'loc', 'stationId', 'station_id'],
   USERNAME: ['username', 'user', 'userid', 'user_id', 'user-id', 'user_name', 'user-name', 'person', 'person_name'],
   TIMESTAMP: ['timestamp', 'time', 'date', 'datetime', 'created_at', 'updated_at', 'time_stamp', 'date_time', 'createdAt', 'updatedAt'],
   SPECIES: ['species', 'animal', 'wildlife', 'fauna', 'taxon', 'taxonomy', 'species_name', 'animal_name', 'wildlife_name'],
@@ -62,7 +62,7 @@ const defaultTemplates = [
       targetPanel: 'image',
       mode: 'replace',
       extract: (match) => match[1],
-      sqlTemplate: "SELECT landscapeImageUrl, portraitImageUrl, <sitename_key>, <timestamp_key> FROM ? WHERE <sitename_key> = '<sitename_value>' ORDER BY <timestamp_key>",
+      sqlTemplate: "SELECT * FROM ? WHERE <sitename_key> = '<sitename_value>' ORDER BY <timestamp_key>",
       placeholders: [PLACEHOLDER_ENUMS.SITENAME]
     },
     {
