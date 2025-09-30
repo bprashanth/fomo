@@ -106,7 +106,7 @@
       <!-- Only show main content when logged in and not on dashboard -->
       <template v-else>
         <!-- S3 Load Button - Center of the page -->
-        <div class="s3-load-section">
+        <!-- <div class="s3-load-section">
           <button
             class="s3-load-button"
             @click="loadDataFromS3"
@@ -115,9 +115,25 @@
             <span v-if="isLoadingS3">Loading...</span>
             <span v-else>New Field Data</span>
           </button>
-        </div>
+        </div> -->
 
         <FileUpload @fileParsed="handleFileParsed" />
+
+        <div class="org-data-chips" v-if="availableDataSources.length > 0">
+          <div
+          v-for="dataSource in availableDataSources"
+          :key="dataSource.name"
+          class="data-chip"
+          @click="loadDataFromS3(dataSource.url)"
+          :class="{ 'loading': isLoadingS3 && loadingUrl === dataSource.url }">
+            <span v-if="isLoadingS3 && loadingUrl === dataSource.url">Loading...</span>
+            <span v-else>
+              {{ dataSource.name }}
+            </span>
+          </div>
+        </div>
+
+
         <TabComponent
           v-if="tabs"
           :tabs="tabs"
@@ -233,36 +249,71 @@ const dataViewerRef = ref(null);
 // Loading state for S3 data
 const isLoadingS3 = ref(false);
 
-// Organization to S3 URL mapping
-const orgS3Urls = {
-  'ncf': 'https://fomomon.s3.amazonaws.com/ncf/db.json'
-};
+const userEmail = ref('');
+const currentOrg = ref(null);
+const availableDataSources = ref([]);
+const loadingUrl = ref('');
 
-// Current organization (hardcoded for now)
-const currentOrg = 'ncf';
+// Organization to S3 URL mapping
+const orgDataSources = {
+  'ncf-india': [
+    {
+      name: 'FOMO data',
+      url: 'https://fomomon.s3.amazonaws.com/ncf/db.json'
+    }
+  ],
+  'tech4goodcommunity': [
+    {
+      name: 'FOMO data',
+      url: 'https://fomomon.s3.amazonaws.com/ncf/db.json'
+    }
+  ]
+};
 
 onMounted(() => {
   console.log('App mounted');
   window.addEventListener('keydown', handleKeyDown);
+
+  // The logged in user's email is stored locally.
+  // Extract that and use it to lookup available data sources.
+  const user = JSON.parse(localStorage.getItem('user'));
+  if (user?.email) {
+    userEmail.value = user.email;
+    currentOrg.value = extractOrgFromEmail(user.email);
+    console.log('App: Current org', currentOrg.value);
+
+    if (currentOrg.value && orgDataSources[currentOrg.value]) {
+      availableDataSources.value = orgDataSources[currentOrg.value];
+    }
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
 });
 
+const extractOrgFromEmail = (email) => {
+  // Extract domain from email (part after @)
+  const domain = email.split('@')[1];
+  if (!domain) return null;
+
+  // Extract org name (part before the TLD)
+  // Split by '.' and take everything except the last part (TLD)
+  const parts = domain.split('.');
+  if (parts.length < 2) return null;
+
+  // Return the org name (all parts except the last one)
+  return parts.slice(0, -1).join('.');
+}
+
 // Loads data from S3 and navigates to dashboard
-const loadDataFromS3 = async () => {
+const loadDataFromS3 = async (url) => {
   try {
     isLoadingS3.value = true;
+    loadingUrl.value = url;
     console.log('Loading data from S3...');
 
-    const s3Url = orgS3Urls[currentOrg];
-    if (!s3Url) {
-      throw new Error(`No S3 URL configured for organization: ${currentOrg}`);
-    }
-
-    const response = await fetch(s3Url);
-
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -280,10 +331,11 @@ const loadDataFromS3 = async () => {
 
   } catch (error) {
     console.error('Error loading data from S3:', error);
-    alert(`Failed to load data from S3 for organization ${currentOrg}. Please check the console for details.`);
+    alert(`Failed to load data from S3 for organization ${url}. Please check the console for details.`);
     // error handling
   } finally {
     isLoadingS3.value = false;
+    loadingUrl.value = '';
   }
 };
 
@@ -542,6 +594,38 @@ const handleKeyDown = (e) => {
   color: #3388ff;
 }
 
+
+/* Data chip styling */
+.org-data-chips {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+}
+
+.data-chip {
+  background: rgba(30, 98, 140, 0.1);
+  border: 1px solid rgba(20, 98, 140, 0.3);
+  color: #1E628C;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.data-chip:hover:not(.loading) {
+  background: rgba(30, 98, 140, 0.2);
+  border-color: rgba(30, 98, 140, 0.5);
+  transform: translateY(-1px);
+}
+
+.data-chip.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 </style>
 
 <style>
