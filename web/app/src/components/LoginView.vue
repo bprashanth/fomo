@@ -18,6 +18,7 @@ const router = useRouter();
 
 const whitelist = [
   '*@tech4goodcommunity.com',
+  '*@ncf-india.org',
 ];
 
 // Returns true if the email is in the whitelist.

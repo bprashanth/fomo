@@ -27,6 +27,10 @@ import "leaflet/dist/leaflet.css";
 export default {
     name: "MapComponent",
     props: {
+        template: {
+            type: Object,
+            default: null,
+        },
         queryResult: {
             type: Array,
             default: () => [],
@@ -35,6 +39,8 @@ export default {
             type: Object,
             default: null,
         },
+        // TODO(prashanth@): remove this prop. It is currently unused and
+        // passed as null from the parent.
         geoJsonData: {
             type: Array,
             default: () => [],
@@ -70,6 +76,7 @@ export default {
             hoverLayer: null,
         }
     },
+
     mounted() {
       // On the use of nextTick:
       // Next tick forces onMounted to run after the DOM has updated (i.e in
@@ -79,10 +86,14 @@ export default {
       // needs to access the DOM, like we need here for leaflet).
       this.$nextTick(() => {
         this.initializeMap();
+
+        if (this.effectiveQueryResult && this.effectiveQueryResult.length > 0) {
+            this.updateMarkers(this.effectiveQueryResult);
+        }
       });
     },
     watch: {
-        queryResult: {
+        effectiveQueryResult: {
             immediate: true,
             handler(newData) {
                 this.updateMarkers(newData);
@@ -102,6 +113,11 @@ export default {
                 }
             },
         },
+    },
+    computed: {
+      effectiveQueryResult() {
+        return this.template?.queryResults || this.queryResult || [];
+      }
     },
     methods: {
 
@@ -188,11 +204,14 @@ export default {
         // End copied methods from WriterMapComponent.vue
 
         initializeMap() {
-            // Initialize the map without setting the view
+            // Initialize the map with a default view first
             this.map = L.map("map", {
                 attributionControl: false,
                 zoomControl: false,
             });
+
+            // Set a default view to ensure the map is properly initialized
+            this.map.setView([0, 0], 2);
 
             // Add the Esri Gray (Light) basemap
             this.baseLayers.dark.addTo(this.map);
@@ -201,8 +220,6 @@ export default {
             this.loadGeoJsonData();
         },
         loadGeoJsonData() {
-            if (!this.geoJsonData) return;
-
             // Create a bounds object to track the extent of all layers
             const bounds = L.latLngBounds([]);
 
@@ -252,12 +269,39 @@ export default {
             });
 
             // Fit the map to the bounds with some padding
-            if (!bounds.isValid()) return;  // Safety check if no valid bounds
-            this.map.fitBounds(bounds, {
-                padding: [50, 50],  // Add 50px padding around the bounds
+            if (bounds.isValid()) {
+              this.map.fitBounds(bounds, {
+                  padding: [50, 50],  // Add 50px padding around the bounds
                 maxZoom: 16        // Prevent zooming in too far
-            });
+                });
+            } else {
+              this.centerOnQueryResultPoints();
+            }
         },
+
+        centerOnQueryResultPoints() {
+          if (!this.effectiveQueryResult || !Array.isArray(this.effectiveQueryResult) || this.effectiveQueryResult.length === 0) {
+            // Fallback to default world view
+            this.map.setView([0, 0], 2);
+            return;
+          }
+
+          const points = this.processMapPoints(this.effectiveQueryResult);
+          if (points.length === 0) {
+            // Fallback to default world view
+            this.map.setView([0, 0], 2);
+            return;
+          }
+
+          const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
+          this.map.flyToBounds(bounds, {
+            padding: [50, 50],
+            maxZoom: 13,
+            duration: 1,
+            easeLinearity: 0.3,
+          });
+        },
+
         toggleDropdown() {
             this.dropdownOpen = !this.dropdownOpen;
         },
@@ -272,6 +316,9 @@ export default {
         },
         updateMarkers(data) {
             if (!data) {
+                return
+            }
+            if (!this.map) {
                 return
             }
             const points = this.processMapPoints(data);
@@ -299,6 +346,11 @@ export default {
             });
 
             this.markerLayer.addTo(this.map);
+
+            // Center on the new points if no geoJsonData bounds were set
+            if (!this.geoJsonData || this.geoJsonData.length === 0) {
+              this.centerOnQueryResultPoints();
+            }
         },
     },
 };

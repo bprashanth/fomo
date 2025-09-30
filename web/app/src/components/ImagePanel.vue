@@ -99,11 +99,19 @@
 </template>
 
 <script setup>
-import { defineProps, ref, watchEffect, defineEmits, nextTick } from 'vue';
+import { defineProps, ref, watchEffect, defineEmits, nextTick, computed } from 'vue';
 
 const props = defineProps({
     field: Object,
-    queryResult: Array,
+    template: Object,
+    queryResult: {
+        type: Array,
+        default: () => [],
+    },
+});
+
+const effectiveQueryResult = computed(() => {
+  return props.template?.queryResults || props.queryResult || [];
 });
 
 const emit = defineEmits(['note-update']);
@@ -122,7 +130,7 @@ const imageUrl = ref('');
 // Record the notes to display in the popup.
 const notes = ref([]);
 // Local copy of queryResult to store notes.
-// Set in watchEffect, to props.queryResult.
+// Set in watchEffect, to queryResult.
 const localQueryResult = ref([]);
 
 // Map/Tile navigation variables. Eg:
@@ -276,7 +284,7 @@ function getTileUrl(tileIndex) {
     return null;
   }
 
-  const currentRecord = props.queryResult[matchingRecordIndex.value];
+  const currentRecord = effectiveQueryResult.value[matchingRecordIndex.value];
   const tiles = getValueByPath(currentRecord, tilesPath.value);
   console.log("ImagePanel: tiles: looking for tile url at index: ", tileIndex, "tile path: ", tilesPath.value, " got tiles: ", tiles);
 
@@ -410,7 +418,7 @@ function isImage(textContent) {
 // just the eg html span element the user clicks on.
 //
 // We use this span element to reverse lookup the key:value pair in the
-// props.queryResult array (see comments above those functions). These values
+// queryResult array (see comments above those functions). These values
 // are then recorded in matchingRecordIndex and matchingFieldPath.
 //
 // We can't use a computed block because we also want to update imageUrl from
@@ -427,7 +435,7 @@ function isImage(textContent) {
 // This is also why we DO NOT need 2 separate watchEffects.
 
 watchEffect(() => {
-  if (!props.field || !props.queryResult) return;
+  if (!props.field || !effectiveQueryResult.value) return;
 
   console.log("ImagePanel: watchEffect triggered");
 
@@ -447,29 +455,29 @@ watchEffect(() => {
       console.log("ImagePanel: matchingIndex: ", matchingIndex, "matchingPath: ", matchingPath);
       matchingRecordIndex.value = matchingIndex;
       matchingFieldPath.value = matchingPath;
-      matchingRecord.value = props.queryResult[matchingIndex];
-      updateImageUrl(props.queryResult[matchingIndex], matchingPath);
+      matchingRecord.value = effectiveQueryResult.value[matchingIndex];
+      updateImageUrl(effectiveQueryResult.value[matchingIndex], matchingPath);
     } else {
       console.warn("ImagePanel: no matching index/path found for the clicked field.");
     }
   }
 
-  console.log("ImagePanel: props.queryResult: ", props.queryResult);
+  console.log("ImagePanel: effectiveQueryResult: ", effectiveQueryResult.value);
 
-  for (const item of props.queryResult.slice(0, 10)) {
+  for (const item of effectiveQueryResult.value.slice(0, 10)) {
     console.log("ImagePanel: item: ", item);
     console.log("ImagePanel: item.notes: ", item.notes);
   }
 
-  // We are fine resetting localQueryResult on every props.queryResult change
-  // because queryResult will change only when a different query is run in the
+  // We are fine resetting localQueryResult on every queryResult change
+  // because queryResult.value will change only when a different query is run in the
   // schema panel. But we don't want to reset it when the user closes the popup
   // and clicks on another field without changing the query. This is because
   // we don't update the queryResults in the schemaPanel (where the user is
   // clicking) with the notes, we straight update the editorData (i.e the core
   // list from which query result is derived in the schema panel).
   console.log("ImagePanel: queryResultsChanged, resetting localQueryResult");
-  localQueryResult.value = props.queryResult.map(item => ({
+  localQueryResult.value = effectiveQueryResult.value.map(item => ({
     ...item,
     notes: Array.isArray(item?.notes) ? item.notes : []
   }));
@@ -480,13 +488,13 @@ watchEffect(() => {
  * Shows the previous image or tile.
  */
 const showPrevious = () => {
-  if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
+  if (effectiveQueryResult.value.length === 0 || matchingRecordIndex.value === -1) return;
 
   saveNotes(matchingRecordIndex.value);
 
   if (isMapWithTiles.value && showPopup.value) {
     // Navigate through tiles within the same object
-    const currentRecord = props.queryResult[matchingRecordIndex.value];
+    const currentRecord = effectiveQueryResult.value[matchingRecordIndex.value];
     const tiles = getValueByPath(currentRecord, tilesPath.value);
 
     if (Array.isArray(tiles) && tiles.length > 0) {
@@ -501,9 +509,9 @@ const showPrevious = () => {
     }
   } else {
     // Normal navigation between objects
-    matchingRecordIndex.value = (matchingRecordIndex.value - 1 + props.queryResult.length) % props.queryResult.length;
+    matchingRecordIndex.value = (matchingRecordIndex.value - 1 + effectiveQueryResult.value.length) % effectiveQueryResult.value.length;
     updateImageUrl(
-      props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+      effectiveQueryResult.value[matchingRecordIndex.value], matchingFieldPath.value);
     loadNotes(matchingRecordIndex.value);
   }
 }
@@ -512,13 +520,13 @@ const showPrevious = () => {
  * Shows the next image or tile.
  */
 const showNext = () => {
-  if (props.queryResult.length === 0 || matchingRecordIndex.value === -1) return;
+  if (effectiveQueryResult.value.length === 0 || matchingRecordIndex.value === -1) return;
 
   saveNotes(matchingRecordIndex.value);
 
   if (isMapWithTiles.value && showPopup.value) {
     // Navigate through tiles within the same object
-    const currentRecord = props.queryResult[matchingRecordIndex.value];
+    const currentRecord = effectiveQueryResult.value[matchingRecordIndex.value];
     const tiles = getValueByPath(currentRecord, tilesPath.value);
 
     if (Array.isArray(tiles) && tiles.length > 0) {
@@ -533,9 +541,9 @@ const showNext = () => {
     }
   } else {
     // Normal navigation between objects
-    matchingRecordIndex.value = (matchingRecordIndex.value + 1) % props.queryResult.length;
+    matchingRecordIndex.value = (matchingRecordIndex.value + 1) % effectiveQueryResult.value.length;
     updateImageUrl(
-      props.queryResult[matchingRecordIndex.value], matchingFieldPath.value);
+      effectiveQueryResult.value[matchingRecordIndex.value], matchingFieldPath.value);
     loadNotes(matchingRecordIndex.value);
   }
 }
@@ -556,7 +564,7 @@ const showNext = () => {
  *
  * @params
  *  - props.field: The field that the user clicked on.
- *  - props.queryResult: The query result array.
+ *  - queryResult: The query result array.
  *
  * @returns {Object} An object with the matching index and path. Eg:
  *  { matchingIndex: 0, matchingPath: 'picture.imageURL' }
@@ -574,7 +582,7 @@ function constructClickedFieldKeyPath(keyName, keyValue) {
 
   console.log("ImagePanel: finding matching object for key: ", keyName, "value: ", keyValue);
   const { matchingIndex, matchingPath } = findMatchingObject(
-    props.queryResult,
+    effectiveQueryResult.value,
     keyName,
     keyValue
   );
@@ -711,7 +719,7 @@ function openPopup() {
         // nextTick.
         // TODO(prashanth@): gh/issue/23
         nextTick(() => {
-          const currentRecord = props.queryResult[matchingRecordIndex.value];
+          const currentRecord = effectiveQueryResult.value[matchingRecordIndex.value];
           const tiles = getValueByPath(currentRecord, tilesPath.value);
 
           // Check if the preview image is already loaded
