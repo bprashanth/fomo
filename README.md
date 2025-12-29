@@ -1,2 +1,2 @@
 # fomo
-The fomonolith: All code related to the fomo platform (web, mobile etc)
+All code related to the fomom web frontend. 
