@@ -210,13 +210,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
 import WriterMapComponent from './components/WriterMapComponent.vue';
 import DataViewer from './components/DataViewer.vue';
 import { useRouter } from 'vue-router';
+import { store } from './store';
 
 const router = useRouter();
 
@@ -273,19 +274,6 @@ const orgDataSources = {
 onMounted(() => {
   console.log('App mounted');
   window.addEventListener('keydown', handleKeyDown);
-
-  // The logged in user's email is stored locally.
-  // Extract that and use it to lookup available data sources.
-  const user = JSON.parse(localStorage.getItem('user'));
-  if (user?.email) {
-    userEmail.value = user.email;
-    currentOrg.value = extractOrgFromEmail(user.email);
-    console.log('App: Current org', currentOrg.value);
-
-    if (currentOrg.value && orgDataSources[currentOrg.value]) {
-      availableDataSources.value = orgDataSources[currentOrg.value];
-    }
-  }
 });
 
 onBeforeUnmount(() => {
@@ -437,6 +425,25 @@ const handleKeyDown = (e) => {
     );
   }
 }
+watch(() => store.user, (user) => {
+  if (user?.email) {
+    userEmail.value = user.email;
+    currentOrg.value = extractOrgFromEmail(user.email);
+
+    if (currentOrg.value && orgDataSources[currentOrg.value]) {
+      console.log('App: Data sources found for user', currentOrg.value);
+      availableDataSources.value = orgDataSources[currentOrg.value];
+    } else {
+      console.log(`App: No data sources found for user ${user.email} (Org: ${currentOrg.value}). Data button will not be shown.`);
+      availableDataSources.value = [];
+    }
+  } else {
+    // Reset state if user is logged out
+    userEmail.value = '';
+    currentOrg.value = null;
+    availableDataSources.value = [];
+  }
+}, { immediate: true });
 </script>
 
 <style scoped>

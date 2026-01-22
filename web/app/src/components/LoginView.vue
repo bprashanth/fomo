@@ -12,6 +12,7 @@
 
 <script setup>
 import { useRoute, useRouter } from 'vue-router';
+import { store } from '../store';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,8 +40,8 @@ function isEmailAllowed(email) {
 function signInWithGoogle() {
 
   // For staging previews, we can just set the user to a fake email.
-  if (window.location.hostname.includes('deploy-preview')) {
-    localStorage.setItem('user', JSON.stringify({ email: 'dev@fake.com' }));
+  if (window.location.hostname.includes('deploy-preview') || window.location.hostname.includes('localhost')) {
+    store.setUser({ email: 'dev@fake.com' });
     router.push(route.query.redirect || '/');
     return;
   }
@@ -60,7 +61,7 @@ function signInWithGoogle() {
       .then(res => res.json())
       .then(user => {
         if (isEmailAllowed(user.email)) {
-          localStorage.setItem('user', JSON.stringify(user));
+          store.setUser(user);
           router.push(route.query.redirect || '/');
         } else {
           alert('Access denied')
