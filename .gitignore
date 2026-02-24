@@ -52,6 +52,8 @@ docs/_build/
 *.key
 *.password
 *.env
+.env
+.env.*
 
 # venv
 venv/
@@ -61,3 +63,7 @@ venv/
 
 # recursive ignore of node_modules 
 node_modules
+
+# Agents stuff
+AGENTS.md
+CLAUDE.md
