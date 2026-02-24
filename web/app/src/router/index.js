@@ -29,8 +29,22 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const user = JSON.parse(localStorage.getItem('user'));
-  if (!user && to.name !== 'Login') {
-    next({ name: 'Login', query: { redirect: to.fullPath } });
+
+  // Old Google auth objects have no 'org' field — treat as logged out so the
+  // stale entry doesn't bypass the Cognito login form.
+  const isValidUser = user && ('org' in user);
+
+  if (!isValidUser) {
+    // Clear any stale user data
+    localStorage.removeItem('user');
+    if (to.name !== 'Login') {
+      next({ name: 'Login', query: { redirect: to.fullPath } });
+    } else {
+      next();
+    }
+  } else if (isValidUser && user.org !== null && to.name === 'Home') {
+    // Org user landing on Home → go to Dashboard
+    next({ name: 'Dashboard' });
   } else {
     next();
   }

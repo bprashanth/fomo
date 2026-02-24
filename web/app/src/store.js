@@ -15,6 +15,8 @@ import { reactive } from 'vue';
 
 export const store = reactive({
     user: JSON.parse(localStorage.getItem('user') || 'null'),
+    joinedData: null,
+
     setUser(user) {
         this.user = user;
         if (user) {
@@ -22,5 +24,8 @@ export const store = reactive({
         } else {
             localStorage.removeItem('user');
         }
-    }
+    },
+    setJoinedData(data) {
+        this.joinedData = data;
+    },
 });

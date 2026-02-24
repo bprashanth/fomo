@@ -501,3 +501,4 @@ const queryResult = ref(props.data);  // Broadcast to all panels
 - Check: Does DashboardComponent clear template?
 - Check: Does panel prioritize template results correctly?
 
+

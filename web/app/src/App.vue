@@ -70,6 +70,8 @@
   <div id="app">
     <div class="background"></div>
 
+    <SideBar v-if="store.user && $route.name !== 'Login'" />
+
 
     <!-- Content positioning
       - Two dynamic classes are added to the content div
@@ -118,21 +120,6 @@
         </div> -->
 
         <FileUpload @fileParsed="handleFileParsed" />
-
-        <div class="org-data-chips" v-if="availableDataSources.length > 0">
-          <div
-          v-for="dataSource in availableDataSources"
-          :key="dataSource.name"
-          class="data-chip"
-          @click="loadDataFromS3(dataSource.url)"
-          :class="{ 'loading': isLoadingS3 && loadingUrl === dataSource.url }">
-            <span v-if="isLoadingS3 && loadingUrl === dataSource.url">Loading...</span>
-            <span v-else>
-              {{ dataSource.name }}
-            </span>
-          </div>
-        </div>
-
 
         <TabComponent
           v-if="tabs"
@@ -210,12 +197,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import FileUpload from './components/FileUpload.vue';
 import TabComponent from './components/TabComponent.vue';
 import SchemaEditor from './components/SchemaEditor.vue';
 import WriterMapComponent from './components/WriterMapComponent.vue';
 import DataViewer from './components/DataViewer.vue';
+import SideBar from './components/SideBar.vue';
 import { useRouter } from 'vue-router';
 import { store } from './store';
 
@@ -228,7 +216,7 @@ const childTabSelected = ref(null);
 const parentTabSelected = ref(null);
 const fullData = ref({});
 const parentFieldsWithJoins = ref([]);
-const joinedData = ref({});
+const joinedData = computed(() => store.joinedData);
 const savedGeoJsonData = ref([]);
 
 // Separator used to join the child tab name with the child field name.
@@ -247,29 +235,6 @@ const currentEditor = ref('schema');
 // open/close.
 const dataViewerRef = ref(null);
 
-// Loading state for S3 data
-const isLoadingS3 = ref(false);
-
-const userEmail = ref('');
-const currentOrg = ref(null);
-const availableDataSources = ref([]);
-const loadingUrl = ref('');
-
-// Organization to S3 URL mapping
-const orgDataSources = {
-  'ncf-india': [
-    {
-      name: 'FOMO data',
-      url: 'https://fomomon.s3.amazonaws.com/ncf/db.json'
-    }
-  ],
-  'tech4goodcommunity': [
-    {
-      name: 'FOMO data',
-      url: 'https://fomomon.s3.amazonaws.com/ncf/db.json'
-    }
-  ]
-};
 
 onMounted(() => {
   console.log('App mounted');
@@ -279,53 +244,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
 });
-
-const extractOrgFromEmail = (email) => {
-  // Extract domain from email (part after @)
-  const domain = email.split('@')[1];
-  if (!domain) return null;
-
-  // Extract org name (part before the TLD)
-  // Split by '.' and take everything except the last part (TLD)
-  const parts = domain.split('.');
-  if (parts.length < 2) return null;
-
-  // Return the org name (all parts except the last one)
-  return parts.slice(0, -1).join('.');
-}
-
-// Loads data from S3 and navigates to dashboard
-const loadDataFromS3 = async (url) => {
-  try {
-    isLoadingS3.value = true;
-    loadingUrl.value = url;
-    console.log('Loading data from S3...');
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('S3 data loaded:', data);
-
-    // Set the joined data directly
-    joinedData.value = data;
-
-    // Navigate to dashboard
-    router.push({
-      name: 'Dashboard',
-    });
-
-  } catch (error) {
-    console.error('Error loading data from S3:', error);
-    alert(`Failed to load data from S3 for organization ${url}. Please check the console for details.`);
-    // error handling
-  } finally {
-    isLoadingS3.value = false;
-    loadingUrl.value = '';
-  }
-};
 
 // Handles the file upload components emitted data.
 const handleFileParsed = (parsedData) => {
@@ -392,8 +310,7 @@ const handleGeoJsonData = (geoJsonData) => {
 
 // Handles the json viewer components emitted data.
 const handleJoinedData = (data) => {
-  console.log("App: Joined data", data);
-  joinedData.value = data;
+  store.setJoinedData(data);
 };
 
 // Handles the data viewer open/close event.
@@ -425,25 +342,6 @@ const handleKeyDown = (e) => {
     );
   }
 }
-watch(() => store.user, (user) => {
-  if (user?.email) {
-    userEmail.value = user.email;
-    currentOrg.value = extractOrgFromEmail(user.email);
-
-    if (currentOrg.value && orgDataSources[currentOrg.value]) {
-      console.log('App: Data sources found for user', currentOrg.value);
-      availableDataSources.value = orgDataSources[currentOrg.value];
-    } else {
-      console.log(`App: No data sources found for user ${user.email} (Org: ${currentOrg.value}). Data button will not be shown.`);
-      availableDataSources.value = [];
-    }
-  } else {
-    // Reset state if user is logged out
-    userEmail.value = '';
-    currentOrg.value = null;
-    availableDataSources.value = [];
-  }
-}, { immediate: true });
 </script>
 
 <style scoped>
@@ -602,37 +500,6 @@ watch(() => store.user, (user) => {
 }
 
 
-/* Data chip styling */
-.org-data-chips {
-  position: fixed;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-}
-
-.data-chip {
-  background: rgba(30, 98, 140, 0.1);
-  border: 1px solid rgba(20, 98, 140, 0.3);
-  color: #1E628C;
-  padding: 6px 12px;
-  border-radius: 16px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-}
-
-.data-chip:hover:not(.loading) {
-  background: rgba(30, 98, 140, 0.2);
-  border-color: rgba(30, 98, 140, 0.5);
-  transform: translateY(-1px);
-}
-
-.data-chip.loading {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
 </style>
 
 <style>
