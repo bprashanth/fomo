@@ -169,14 +169,16 @@ const handleField = ({ field: selectedField, queryResult: result }) => {
 function handleQuery(result) {
   const currentTemplate = templateDispatch.value.schema;
 
-  if (currentTemplate) {
-    // Template execution - route to target panel
+  if (currentTemplate && currentTemplate.targetPanel !== 'schema') {
+    // Template targets a specific panel — route there.
     templateDispatch.value[currentTemplate.targetPanel] = {
       ...currentTemplate,
       queryResults: result
     };
-    templateDispatch.value.schema = null; // Clear after routing
+    templateDispatch.value.schema = null;
   } else {
+    // No template, or template targets schema (i.e. a general filter query).
+    // Treat as a global result so all panels (including ImagePanel) see it.
     clearAllTemplates();
     queryResult.value = result;
   }
