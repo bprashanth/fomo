@@ -56,8 +56,8 @@
                   <div class="popup-description-username">
 
                       <!-- TODO(prashanth@): rethink whether using matchingRecord directly here is a good idea. -->
-                      <span>{{ matchingRecord.site_id }}</span>
-                      <span style="margin-left: 1em;">{{ formatDate(matchingRecord.date) || '6w ago' }}</span>
+                      <span>{{ matchingRecord.siteId }}</span>
+                      <span style="margin-left: 1em;">{{ formatDate(matchingRecord.timestamp) }}</span>
                   </div>
 
                   <!-- Popup close button: x -->
@@ -488,13 +488,13 @@ watchEffect(() => {
  * Shows the previous image or tile.
  */
 const showPrevious = () => {
-  if (effectiveQueryResult.value.length === 0 || matchingRecordIndex.value === -1) return;
+  if (localQueryResult.value.length === 0 || matchingRecordIndex.value === -1) return;
 
   saveNotes(matchingRecordIndex.value);
 
   if (isMapWithTiles.value && showPopup.value) {
     // Navigate through tiles within the same object
-    const currentRecord = effectiveQueryResult.value[matchingRecordIndex.value];
+    const currentRecord = localQueryResult.value[matchingRecordIndex.value];
     const tiles = getValueByPath(currentRecord, tilesPath.value);
 
     if (Array.isArray(tiles) && tiles.length > 0) {
@@ -508,10 +508,11 @@ const showPrevious = () => {
       }
     }
   } else {
-    // Normal navigation between objects
-    matchingRecordIndex.value = (matchingRecordIndex.value - 1 + effectiveQueryResult.value.length) % effectiveQueryResult.value.length;
-    updateImageUrl(
-      effectiveQueryResult.value[matchingRecordIndex.value], matchingFieldPath.value);
+    // Normal navigation between objects — clamp, don't wrap.
+    if (matchingRecordIndex.value <= 0) return;
+    matchingRecordIndex.value--;
+    matchingRecord.value = localQueryResult.value[matchingRecordIndex.value];
+    updateImageUrl(localQueryResult.value[matchingRecordIndex.value], matchingFieldPath.value);
     loadNotes(matchingRecordIndex.value);
   }
 }
@@ -520,13 +521,13 @@ const showPrevious = () => {
  * Shows the next image or tile.
  */
 const showNext = () => {
-  if (effectiveQueryResult.value.length === 0 || matchingRecordIndex.value === -1) return;
+  if (localQueryResult.value.length === 0 || matchingRecordIndex.value === -1) return;
 
   saveNotes(matchingRecordIndex.value);
 
   if (isMapWithTiles.value && showPopup.value) {
     // Navigate through tiles within the same object
-    const currentRecord = effectiveQueryResult.value[matchingRecordIndex.value];
+    const currentRecord = localQueryResult.value[matchingRecordIndex.value];
     const tiles = getValueByPath(currentRecord, tilesPath.value);
 
     if (Array.isArray(tiles) && tiles.length > 0) {
@@ -540,10 +541,11 @@ const showNext = () => {
       }
     }
   } else {
-    // Normal navigation between objects
-    matchingRecordIndex.value = (matchingRecordIndex.value + 1) % effectiveQueryResult.value.length;
-    updateImageUrl(
-      effectiveQueryResult.value[matchingRecordIndex.value], matchingFieldPath.value);
+    // Normal navigation between objects — clamp, don't wrap.
+    if (matchingRecordIndex.value >= localQueryResult.value.length - 1) return;
+    matchingRecordIndex.value++;
+    matchingRecord.value = localQueryResult.value[matchingRecordIndex.value];
+    updateImageUrl(localQueryResult.value[matchingRecordIndex.value], matchingFieldPath.value);
     loadNotes(matchingRecordIndex.value);
   }
 }
@@ -757,6 +759,11 @@ function formatDate(value) {
   // TODO(prashanth@): this should not be in the frontend, or at least, not
   // just in the frontend. The backend should ensure correct date formats.
   if (!value) return null;
+
+  // String timestamps (e.g. IST "2020-05-01T07:01:30") — return the date part as-is.
+  if (typeof value === 'string') {
+    return value.split('T')[0];
+  }
 
   // Convert to number if it's a string
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
@@ -986,7 +993,7 @@ img {
      */
     width: 100%;
     height: 100%;
-    object-fit: fill;
+    object-fit: contain;
 }
 
 

@@ -155,6 +155,8 @@ const handleTemplateSelected = (template) => {
     'template-selected', {
     detail: { template: template },
   }));
+  isDataViewerOpen.value = false;
+  emit('data-viewer-open', false);
 }
 
 // Keep defineExpose at the end, vue expects us to define the function fist
