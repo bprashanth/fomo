@@ -127,8 +127,22 @@ The router guard (`src/router/index.js`) redirects unauthenticated users to
 | [`docs/layout.md`](docs/layout.md) | Overall panel layout and component hierarchy |
 | [`docs/architecture.md`](docs/architecture.md) | Query template dispatch system; how SQL results flow between panels |
 | [`docs/event_processing.md`](docs/event_processing.md) | Event flow inside `DashboardComponent` for direct queries vs. template queries |
-| [`docs/data_upload.md`](docs/data_upload.md) | Legacy Excel + image upload workflow (pre-API path; still used for ad-hoc data) |
 | [`docs/design/auth_data_flow.md`](docs/design/auth_data_flow.md) | Design doc for the Cognito login → sessions fetch → dashboard flow |
+| [`docs/data_upload.md`](docs/data_upload.md) | **Legacy.** The dead Drive → S3 → Excel path. Kept as history — do not implement against it. |
+
+### Integration (start here for anything touching the data)
+
+| Doc | What it covers |
+|-----|---------------|
+| [`docs/design/integration_brief.md`](docs/design/integration_brief.md) | **Read first.** The 3-repo layout, real S3 key layout, cross-bucket image URLs, the `site_rename_0426` ID migration, and which checked-in docs are out of date |
+
+### Evaluations (not implemented — decision docs)
+
+| Doc | What it covers |
+|-----|---------------|
+| [`docs/design/storage_immich.md`](docs/design/storage_immich.md) | Whether to use Immich as a photo backend. Tag/album search, OIDC-against-Cognito, shared links; why it's a complement not a replacement |
+| [`docs/design/image_features.md`](docs/design/image_features.md) | Deriving numeric features (sky/canopy/greenness) from site photos. Includes results from a real run over the NCF 2019–2025 series, why CLIP can't do this, and the registration design |
+| [`docs/design/species_trends_issues.md`](docs/design/species_trends_issues.md) | Known data issues in `biodiversity_db.json` (GBIF + Zenodo) affecting the trend chart |
 
 ### Manuals (how-to for agents and developers)
 
